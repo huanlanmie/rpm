@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.project.system.devices.mapper.RpmDevicesMapper">
+    
+    <resultMap type="RpmDevices" id="RpmDevicesResult">
+        <result property="id"    column="id"    />
+        <result property="userId"    column="user_id"    />
+        <result property="deviceToken"    column="device_token"    />
+        <result property="deviceName"    column="device_name"    />
+        <result property="osVersion"    column="os_version"    />
+        <result property="appVersion"    column="app_version"    />
+        <result property="status"    column="status"    />
+        <result property="lastSeen"    column="last_seen"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="remark"    column="remark"    />
+    </resultMap>
+
+    <sql id="selectRpmDevicesVo">
+        select id, user_id, device_token, device_name, os_version, app_version, status, last_seen, create_by, create_time, update_by, update_time, remark from rpm_devices
+    </sql>
+
+    <select id="selectRpmDevicesList" parameterType="RpmDevices" resultMap="RpmDevicesResult">
+        <include refid="selectRpmDevicesVo"/>
+        <where>  
+            <if test="userId != null "> and user_id = #{userId}</if>
+            <if test="deviceToken != null  and deviceToken != ''"> and device_token = #{deviceToken}</if>
+            <if test="deviceName != null  and deviceName != ''"> and device_name like concat('%', #{deviceName}, '%')</if>
+            <if test="osVersion != null  and osVersion != ''"> and os_version = #{osVersion}</if>
+            <if test="appVersion != null  and appVersion != ''"> and app_version = #{appVersion}</if>
+            <if test="status != null  and status != ''"> and status = #{status}</if>
+            <if test="lastSeen != null "> and last_seen = #{lastSeen}</if>
+        </where>
+    </select>
+    
+    <select id="selectRpmDevicesById" parameterType="Long" resultMap="RpmDevicesResult">
+        <include refid="selectRpmDevicesVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertRpmDevices" parameterType="RpmDevices" useGeneratedKeys="true" keyProperty="id">
+        insert into rpm_devices
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="userId != null">user_id,</if>
+            <if test="deviceToken != null and deviceToken != ''">device_token,</if>
+            <if test="deviceName != null">device_name,</if>
+            <if test="osVersion != null">os_version,</if>
+            <if test="appVersion != null">app_version,</if>
+            <if test="status != null">status,</if>
+            <if test="lastSeen != null">last_seen,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateBy != null">update_by,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="remark != null">remark,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="userId != null">#{userId},</if>
+            <if test="deviceToken != null and deviceToken != ''">#{deviceToken},</if>
+            <if test="deviceName != null">#{deviceName},</if>
+            <if test="osVersion != null">#{osVersion},</if>
+            <if test="appVersion != null">#{appVersion},</if>
+            <if test="status != null">#{status},</if>
+            <if test="lastSeen != null">#{lastSeen},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateBy != null">#{updateBy},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="remark != null">#{remark},</if>
+         </trim>
+    </insert>
+
+    <update id="updateRpmDevices" parameterType="RpmDevices">
+        update rpm_devices
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="userId != null">user_id = #{userId},</if>
+            <if test="deviceToken != null and deviceToken != ''">device_token = #{deviceToken},</if>
+            <if test="deviceName != null">device_name = #{deviceName},</if>
+            <if test="osVersion != null">os_version = #{osVersion},</if>
+            <if test="appVersion != null">app_version = #{appVersion},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="lastSeen != null">last_seen = #{lastSeen},</if>
+            <if test="createBy != null">create_by = #{createBy},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="remark != null">remark = #{remark},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteRpmDevicesById" parameterType="Long">
+        delete from rpm_devices where id = #{id}
+    </delete>
+
+    <delete id="deleteRpmDevicesByIds" parameterType="String">
+        delete from rpm_devices where id in 
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+</mapper>

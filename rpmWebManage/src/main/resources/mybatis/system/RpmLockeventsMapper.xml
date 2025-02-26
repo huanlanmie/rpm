@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.project.system.lockevents.mapper.RpmLockeventsMapper">
+    
+    <resultMap type="RpmLockevents" id="RpmLockeventsResult">
+        <result property="id"    column="id"    />
+        <result property="deviceId"    column="device_id"    />
+        <result property="lockCode"    column="lock_code"    />
+        <result property="lockedAt"    column="locked_at"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="remark"    column="remark"    />
+    </resultMap>
+
+    <sql id="selectRpmLockeventsVo">
+        select id, device_id, lock_code, locked_at, create_by, create_time, update_by, update_time, remark from rpm_lockevents
+    </sql>
+
+    <select id="selectRpmLockeventsList" parameterType="RpmLockevents" resultMap="RpmLockeventsResult">
+        <include refid="selectRpmLockeventsVo"/>
+        <where>  
+            <if test="deviceId != null "> and device_id = #{deviceId}</if>
+            <if test="lockCode != null  and lockCode != ''"> and lock_code = #{lockCode}</if>
+            <if test="lockedAt != null "> and locked_at = #{lockedAt}</if>
+        </where>
+    </select>
+    
+    <select id="selectRpmLockeventsById" parameterType="Long" resultMap="RpmLockeventsResult">
+        <include refid="selectRpmLockeventsVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertRpmLockevents" parameterType="RpmLockevents" useGeneratedKeys="true" keyProperty="id">
+        insert into rpm_lockevents
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="deviceId != null">device_id,</if>
+            <if test="lockCode != null and lockCode != ''">lock_code,</if>
+            <if test="lockedAt != null">locked_at,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateBy != null">update_by,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="remark != null">remark,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="deviceId != null">#{deviceId},</if>
+            <if test="lockCode != null and lockCode != ''">#{lockCode},</if>
+            <if test="lockedAt != null">#{lockedAt},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateBy != null">#{updateBy},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="remark != null">#{remark},</if>
+         </trim>
+    </insert>
+
+    <update id="updateRpmLockevents" parameterType="RpmLockevents">
+        update rpm_lockevents
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="deviceId != null">device_id = #{deviceId},</if>
+            <if test="lockCode != null and lockCode != ''">lock_code = #{lockCode},</if>
+            <if test="lockedAt != null">locked_at = #{lockedAt},</if>
+            <if test="createBy != null">create_by = #{createBy},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="remark != null">remark = #{remark},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteRpmLockeventsById" parameterType="Long">
+        delete from rpm_lockevents where id = #{id}
+    </delete>
+
+    <delete id="deleteRpmLockeventsByIds" parameterType="String">
+        delete from rpm_lockevents where id in 
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+</mapper>
