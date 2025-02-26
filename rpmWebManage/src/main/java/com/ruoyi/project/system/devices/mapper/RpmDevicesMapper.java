@@ -58,4 +58,11 @@ public interface RpmDevicesMapper
      * @return 结果
      */
     public int deleteRpmDevicesByIds(String[] ids);
+
+    /**
+     * 根据uuid查询设备信息
+     * @param uuid  uuid
+     * @return
+     */
+    public RpmDevices selectRpmDevicesByUuid(String uuid);
 }

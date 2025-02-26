@@ -24,6 +24,13 @@ class ScreenManager @Inject constructor(
     // 当前密码
     private var currentPassword: String = "123456" // 测试时使用固定密码
     
+    // 设备管理器引用，通过setter注入以避免循环依赖
+    private var deviceManager: DeviceManager? = null
+    
+    fun setDeviceManager(manager: DeviceManager) {
+        deviceManager = manager
+    }
+    
     /**
      * 锁定设备屏幕
      */
@@ -41,6 +48,9 @@ class ScreenManager @Inject constructor(
             
             _lockState.value = true
             Log.d(TAG, "Device locked with password: $currentPassword")
+            
+            // 更新设备锁定状态
+            deviceManager?.updateLockStatus(true)
         } catch (e: Exception) {
             Log.e(TAG, "Error locking device: ${e.message}")
             e.printStackTrace()
@@ -59,6 +69,9 @@ class ScreenManager @Inject constructor(
             
             _lockState.value = false
             Log.d(TAG, "Device unlocked")
+            
+            // 更新设备锁定状态
+            deviceManager?.updateLockStatus(false)
         } catch (e: Exception) {
             Log.e(TAG, "Error unlocking device: ${e.message}")
         }

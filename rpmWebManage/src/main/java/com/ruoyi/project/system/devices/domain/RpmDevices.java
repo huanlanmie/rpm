@@ -32,6 +32,10 @@ public class RpmDevices extends BaseEntity
     @Excel(name = "设备名称")
     private String deviceName;
 
+    /** 设备状态 */
+    @Excel(name = "设备状态")
+    private Long deviceStatus;
+
     /** 操作系统版本 */
     @Excel(name = "操作系统版本")
     private String osVersion;
@@ -45,9 +49,10 @@ public class RpmDevices extends BaseEntity
     private String status;
 
     /** 最近一次在线时间 */
-    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
-    @Excel(name = "最近一次在线时间", width = 30, dateFormat = "yyyy-MM-dd")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    @Excel(name = "最近一次在线时间", width = 30, dateFormat = "yyyy-MM-dd HH:mm:ss")
     private Date lastSeen;
+
 
     public void setId(Long id) 
     {
@@ -87,6 +92,16 @@ public class RpmDevices extends BaseEntity
     public String getDeviceName() 
     {
         return deviceName;
+    }
+
+    public void setDeviceStatus(Long deviceStatus) 
+    {
+        this.deviceStatus = deviceStatus;
+    }
+
+    public Long getDeviceStatus() 
+    {
+        return deviceStatus;
     }
 
     public void setOsVersion(String osVersion) 
@@ -136,6 +151,7 @@ public class RpmDevices extends BaseEntity
             .append("userId", getUserId())
             .append("deviceToken", getDeviceToken())
             .append("deviceName", getDeviceName())
+            .append("deviceStatus", getDeviceStatus())
             .append("osVersion", getOsVersion())
             .append("appVersion", getAppVersion())
             .append("status", getStatus())

@@ -23,6 +23,13 @@
                                 <input type="text" name="deviceName"/>
                             </li>
                             <li>
+                                <label>设备状态：</label>
+                                <select name="deviceStatus" th:with="type=${@dict.getType('rpm_device_status')}">
+                                    <option value="">所有</option>
+                                    <option th:each="dict : ${type}" th:text="${dict.dictLabel}" th:value="${dict.dictValue}"></option>
+                                </select>
+                            </li>
+                            <li>
                                 <label>操作系统版本：</label>
                                 <input type="text" name="osVersion"/>
                             </li>
@@ -66,6 +73,7 @@
     <script th:inline="javascript">
         var editFlag = [[${@permission.hasPermi('system:devices:edit')}]];
         var removeFlag = [[${@permission.hasPermi('system:devices:remove')}]];
+        var deviceStatusDatas = [[${@dict.getType('rpm_device_status')}]];
         var prefix = ctx + "system/devices";
 
         $(function() {
@@ -95,6 +103,13 @@
                 {
                     field: 'deviceName',
                     title: '设备名称'
+                },
+                {
+                    field: 'deviceStatus',
+                    title: '设备状态',
+                    formatter: function(value, row, index) {
+                       return $.table.selectDictLabel(deviceStatusDatas, value);
+                    }
                 },
                 {
                     field: 'osVersion',

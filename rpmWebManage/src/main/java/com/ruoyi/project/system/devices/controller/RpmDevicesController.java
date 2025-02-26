@@ -5,11 +5,7 @@ import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.ModelMap;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.*;
 import com.ruoyi.framework.aspectj.lang.annotation.Log;
 import com.ruoyi.framework.aspectj.lang.enums.BusinessType;
 import com.ruoyi.project.system.devices.domain.RpmDevices;
@@ -44,7 +40,7 @@ public class RpmDevicesController extends BaseController
     /**
      * 查询存储用户的设备信息列表
      */
-    @RequiresPermissions("system:devices:list")
+//    @RequiresPermissions("system:devices:list")
     @PostMapping("/list")
     @ResponseBody
     public TableDataInfo list(RpmDevices rpmDevices)
@@ -71,7 +67,7 @@ public class RpmDevicesController extends BaseController
     /**
      * 新增存储用户的设备信息
      */
-    @RequiresPermissions("system:devices:add")
+//    @RequiresPermissions("system:devices:add")
     @GetMapping("/add")
     public String add()
     {
@@ -81,11 +77,17 @@ public class RpmDevicesController extends BaseController
     /**
      * 新增保存存储用户的设备信息
      */
-    @RequiresPermissions("system:devices:add")
+//    @RequiresPermissions("system:devices:add")
     @Log(title = "存储用户的设备信息", businessType = BusinessType.INSERT)
     @PostMapping("/add")
     @ResponseBody
-    public AjaxResult addSave(RpmDevices rpmDevices)
+    public AjaxResult addSave(RpmDevices rpmDevices) {
+        return toAjax(rpmDevicesService.insertRpmDevices(rpmDevices));
+    }
+
+    @PostMapping("/client-add")
+    @ResponseBody
+    public AjaxResult clientAddSave(@RequestBody RpmDevices rpmDevices)
     {
         return toAjax(rpmDevicesService.insertRpmDevices(rpmDevices));
     }
@@ -93,7 +95,7 @@ public class RpmDevicesController extends BaseController
     /**
      * 修改存储用户的设备信息
      */
-    @RequiresPermissions("system:devices:edit")
+//    @RequiresPermissions("system:devices:edit")
     @GetMapping("/edit/{id}")
     public String edit(@PathVariable("id") Long id, ModelMap mmap)
     {
@@ -103,9 +105,37 @@ public class RpmDevicesController extends BaseController
     }
 
     /**
+     * 获取存储用户的设备信息通过ID
+     * @param id
+     * @return
+     */
+    @GetMapping("/get/{id}")
+    @ResponseBody
+    public AjaxResult get(@PathVariable("id") Long id)
+    {
+        RpmDevices rpmDevices = rpmDevicesService.selectRpmDevicesById(id);
+        return AjaxResult.success(rpmDevices);
+    }
+
+    /**
+     * 获取存储用户的设备信息通过uuid
+     * @param uuid
+     * @return
+     */
+    @GetMapping("/getByUuid/{uuid}")
+    @ResponseBody
+    public AjaxResult getByUuid(@PathVariable("uuid") String uuid)
+    {
+        RpmDevices rpmDevices = rpmDevicesService.selectRpmDevicesByUuid(uuid);
+        return AjaxResult.success(rpmDevices);
+    }
+
+
+
+    /**
      * 修改保存存储用户的设备信息
      */
-    @RequiresPermissions("system:devices:edit")
+//    @RequiresPermissions("system:devices:edit")
     @Log(title = "存储用户的设备信息", businessType = BusinessType.UPDATE)
     @PostMapping("/edit")
     @ResponseBody
@@ -114,10 +144,18 @@ public class RpmDevicesController extends BaseController
         return toAjax(rpmDevicesService.updateRpmDevices(rpmDevices));
     }
 
+    @Log(title = "客户端更新用户的设备信息", businessType = BusinessType.UPDATE)
+    @PostMapping("/client-edit")
+    @ResponseBody
+    public AjaxResult clientEditSave(@RequestBody RpmDevices rpmDevices)
+    {
+        return toAjax(rpmDevicesService.updateRpmDevices(rpmDevices));
+    }
+
     /**
      * 删除存储用户的设备信息
      */
-    @RequiresPermissions("system:devices:remove")
+//    @RequiresPermissions("system:devices:remove")
     @Log(title = "存储用户的设备信息", businessType = BusinessType.DELETE)
     @PostMapping( "/remove")
     @ResponseBody

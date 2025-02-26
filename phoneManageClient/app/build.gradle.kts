@@ -62,6 +62,7 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation("androidx.navigation:navigation-compose:2.7.6")
     implementation("com.google.dagger:hilt-android:2.48")
+    implementation(libs.androidx.hilt.work)
     kapt("com.google.dagger:hilt-android-compiler:2.48")
     implementation("androidx.hilt:hilt-navigation-compose:1.1.0")
     implementation("com.squareup.okhttp3:okhttp:4.10.0")
@@ -78,6 +79,11 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
     implementation("androidx.localbroadcastmanager:localbroadcastmanager:1.1.0")
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+    implementation("com.google.code.gson:gson:2.10.1")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.11.0")
+    implementation("androidx.work:work-runtime-ktx:2.8.1")
 }
 
 kapt {

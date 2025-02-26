@@ -94,4 +94,14 @@ public class RpmDevicesServiceImpl implements IRpmDevicesService
     {
         return rpmDevicesMapper.deleteRpmDevicesById(id);
     }
+
+    /**
+     * 根据uuid查询存储用户的设备信息
+     * @param uuid
+     * @return
+     */
+    @Override
+    public RpmDevices selectRpmDevicesByUuid(String uuid) {
+        return rpmDevicesMapper.selectRpmDevicesByUuid(uuid);
+    }
 }

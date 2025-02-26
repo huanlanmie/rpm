@@ -58,4 +58,9 @@ public interface IRpmDevicesService
      * @return 结果
      */
     public int deleteRpmDevicesById(Long id);
+
+    /**
+     * 根据uuid查询设备信息
+     */
+    public RpmDevices selectRpmDevicesByUuid(String uuid);
 }
