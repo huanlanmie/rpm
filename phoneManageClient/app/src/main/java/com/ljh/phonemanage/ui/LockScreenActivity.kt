@@ -7,23 +7,46 @@ import android.content.pm.ActivityInfo
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.util.Log
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ljh.phonemanage.MainActivity
+import com.ljh.phonemanage.service.LockScreenService
 import com.ljh.phonemanage.ui.theme.PhoneManageTheme
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -32,11 +55,14 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.TimeUnit
+import kotlin.random.Random
 
 @AndroidEntryPoint
 class LockScreenActivity : ComponentActivity() {
     private var activityManager: ActivityManager? = null
     private var isLocked = true
+    private val TAG = "LockScreenActivity"
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -97,35 +123,62 @@ class LockScreenActivity : ComponentActivity() {
             }
         }
         
-        val password = intent.getStringExtra("password") ?: "000000"
+        // 获取传入的密码，如果没有则生成随机6位数密码
+        val passedPassword = intent.getStringExtra(LockScreenService.EXTRA_PASSWORD)
+        val password = if (passedPassword.isNullOrEmpty()) {
+            generateRandomPassword()
+        } else {
+            passedPassword
+        }
+        
+        Log.d(TAG, "Lock screen started with password: $password")
         
         setContent {
             PhoneManageTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = Color.Black.copy(alpha = 0.9f)
+                    color = MaterialTheme.colorScheme.background
                 ) {
-                    LockScreenContent(
-                        password = password,
-                        onUnlock = {
-                            // 解锁时停止锁定任务
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                                try {
-                                    stopLockTask()
-                                } catch (e: Exception) {
-                                    e.printStackTrace()
-                                }
+                    LockScreenContent(password) {
+                        // 解锁时立即设置isLocked为false，停止监控
+                        isLocked = false
+                        
+                        // 停止锁定任务模式（如果之前启动了）
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                            try {
+                                stopLockTask()
+                            } catch (e: Exception) {
+                                Log.e(TAG, "停止锁定任务失败", e)
                             }
-                            isLocked = false
+                        }
+                        
+                        // 启动主活动并结束锁屏活动
+                        CoroutineScope(Dispatchers.Main).launch {
+                            delay(300) // 短暂延迟以展示退出动画
+                            
+                            // 创建启动主活动的Intent
+                            val mainIntent = Intent(this@LockScreenActivity, MainActivity::class.java).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            startActivity(mainIntent)
+                            
+                            // 结束当前活动
                             finish()
                         }
-                    )
+                    }
                 }
             }
         }
         
         // 启动监控任务
         startMonitoring()
+    }
+    
+    // 生成随机6位数密码
+    private fun generateRandomPassword(): String {
+        return (0..5)
+            .map { Random.nextInt(0, 10) }
+            .joinToString("")
     }
     
     private fun startMonitoring() {
@@ -169,8 +222,18 @@ class LockScreenActivity : ComponentActivity() {
     }
     
     override fun onBackPressed() {
-        // 禁用返回键
-        moveTaskToFront()
+        // 不调用super，禁用返回键
+    }
+    
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        return when (keyCode) {
+            KeyEvent.KEYCODE_HOME,
+            KeyEvent.KEYCODE_VOLUME_UP,
+            KeyEvent.KEYCODE_VOLUME_DOWN,
+            KeyEvent.KEYCODE_MENU,
+            KeyEvent.KEYCODE_APP_SWITCH -> true
+            else -> super.onKeyDown(keyCode, event)
+        }
     }
     
     override fun onPause() {
@@ -193,107 +256,321 @@ class LockScreenActivity : ComponentActivity() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LockScreenContent(
-    password: String,
-    onUnlock: () -> Unit
-) {
-    var inputPassword by remember { mutableStateOf("") }
-    var showError by remember { mutableStateOf(false) }
+fun LockScreenContent(password: String, onUnlock: () -> Unit) {
+    val context = LocalContext.current
+    val scrollState = rememberScrollState()
     
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-            .imePadding(), // 添加这个来处理软键盘
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text(
-            text = "设备已锁定",
-            color = Color.White,
-            fontSize = 24.sp,
-            modifier = Modifier.padding(bottom = 32.dp)
-        )
-
-        Text(
-            text = "你的付出定不负你,山无陵,天地合,乃敢与君绝 I will be with you.",
-            color = Color.White,
-            fontSize = 24.sp,
-            modifier = Modifier.padding(bottom = 32.dp)
-        )
-        
-        Text(
-            text = "测试密码: $password",
-            color = Color.White,
-            fontSize = 18.sp,
-            modifier = Modifier.padding(bottom = 32.dp)
-        )
-        
-        OutlinedTextField(
-            value = inputPassword,
-            onValueChange = { 
-                inputPassword = it
-                showError = false
-            },
-            label = { Text("请输入密码", color = Color.White) },
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor = Color.White,
-                unfocusedTextColor = Color.White,
-                cursorColor = Color.White,
-                focusedBorderColor = if (showError) Color.Red else Color.White,
-                unfocusedBorderColor = if (showError) Color.Red.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.7f),
-                focusedLabelColor = Color.White,
-                unfocusedLabelColor = Color.White.copy(alpha = 0.7f)
-            ),
-            isError = showError,
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.NumberPassword,
-                imeAction = ImeAction.Done
-            ),
-            keyboardActions = KeyboardActions(
-                onDone = {
-                    if (inputPassword == password) {
-                        onUnlock()
-                    } else {
-                        showError = true
+    // 新增一个状态，表示界面是否正在解锁过程中
+    var isUnlocking by remember { mutableStateOf(false) }
+    
+    // 番茄时钟状态
+    var currentMode by remember { mutableStateOf("WORK") }
+    var isTimerRunning by remember { mutableStateOf(false) }
+    var remainingTimeMs by remember { mutableLongStateOf(25 * 60 * 1000L) }
+    var inputPassword by remember { mutableStateOf("") }
+    var isPasswordError by remember { mutableStateOf(false) }
+    var completedPomodoros by remember { mutableIntStateOf(0) }
+    
+    // 计算进度百分比
+    val totalTimeMs = when (currentMode) {
+        "WORK" -> 25 * 60 * 1000L
+        "SHORT_BREAK" -> 5 * 60 * 1000L
+        else -> 15 * 60 * 1000L
+    }
+    val progress = 1f - (remainingTimeMs.toFloat() / totalTimeMs.toFloat())
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress,
+        label = "progress animation"
+    )
+    
+    // 颜色设置
+    val progressColor = when (currentMode) {
+        "WORK" -> Color(0xFFE57373) // 红色，工作时间
+        "SHORT_BREAK" -> Color(0xFF81C784) // 绿色，短休息
+        else -> Color(0xFF64B5F6) // 蓝色，长休息
+    }
+    
+    // 时钟更新，只有在未解锁时才运行
+    LaunchedEffect(isTimerRunning, currentMode, isUnlocking) {
+        if (isTimerRunning && !isUnlocking) {
+            while (remainingTimeMs > 0 && !isUnlocking) {
+                delay(1000)
+                if (!isUnlocking) {
+                    remainingTimeMs -= 1000
+                }
+            }
+            
+            // 时间到，切换模式
+            if (remainingTimeMs <= 0 && !isUnlocking) {
+                when (currentMode) {
+                    "WORK" -> {
+                        completedPomodoros++
+                        if (completedPomodoros % 4 == 0) {
+                            currentMode = "LONG_BREAK"
+                            remainingTimeMs = 15 * 60 * 1000L
+                        } else {
+                            currentMode = "SHORT_BREAK"
+                            remainingTimeMs = 5 * 60 * 1000L
+                        }
+                    }
+                    "SHORT_BREAK", "LONG_BREAK" -> {
+                        currentMode = "WORK"
+                        remainingTimeMs = 25 * 60 * 1000L
                     }
                 }
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 32.dp)
-        )
-        
-        if (showError) {
-            Text(
-                text = "密码错误",
-                color = Color.Red,
-                modifier = Modifier.padding(top = 8.dp)
-            )
+            }
         }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        Button(
-            onClick = {
-                if (inputPassword == password) {
-                    onUnlock()
-                } else {
-                    showError = true
-                }
-            },
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = Color.White
-            ),
+    }
+    
+    // 当活动被销毁时停止计时器
+    DisposableEffect(Unit) {
+        onDispose {
+            isTimerRunning = false
+        }
+    }
+    
+    // 使用AnimatedVisibility包装整个UI，以便在解锁时显示动画
+    AnimatedVisibility(
+        visible = !isUnlocking,
+        exit = fadeOut(animationSpec = tween(300)) + shrinkVertically(animationSpec = tween(300)),
+        modifier = Modifier.fillMaxSize()
+    ) {
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 32.dp)
+                .fillMaxSize()
+                .padding(16.dp)
+                .verticalScroll(scrollState),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("解锁")
+            // 显示当前解锁密码
+            Surface(
+                color = MaterialTheme.colorScheme.primaryContainer,
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp)
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(8.dp)
+                ) {
+                    Text(
+                        text = "解锁密码",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Text(
+                        text = password,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
+            
+            // 番茄时钟标题
+            Text(
+                text = "专注时间",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            
+            // 番茄时钟状态
+            Text(
+                text = when (currentMode) {
+                    "WORK" -> "工作时间"
+                    "SHORT_BREAK" -> "短休息"
+                    else -> "长休息"
+                },
+                style = MaterialTheme.typography.titleMedium,
+                color = progressColor
+            )
+            
+            // 番茄时钟进度和时间显示
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.size(200.dp)
+            ) {
+                CircularProgressIndicator(
+                    progress = animatedProgress,
+                    modifier = Modifier.size(200.dp),
+                    color = progressColor,
+                    trackColor = progressColor.copy(alpha = 0.2f),
+                    strokeWidth = 10.dp
+                )
+                
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    val minutes = TimeUnit.MILLISECONDS.toMinutes(remainingTimeMs)
+                    val seconds = TimeUnit.MILLISECONDS.toSeconds(remainingTimeMs) -
+                            TimeUnit.MINUTES.toSeconds(minutes)
+                    
+                    Text(
+                        text = String.format("%02d:%02d", minutes, seconds),
+                        fontSize = 40.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    
+                    Text(
+                        text = "已完成 $completedPomodoros 个番茄",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+                    )
+                }
+            }
+            
+            // 控制按钮
+            Row(
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                // 重置按钮
+                IconButton(
+                    onClick = {
+                        remainingTimeMs = when (currentMode) {
+                            "WORK" -> 25 * 60 * 1000L
+                            "SHORT_BREAK" -> 5 * 60 * 1000L
+                            else -> 15 * 60 * 1000L
+                        }
+                        isTimerRunning = false
+                    },
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Icon(
+                        Icons.Default.Refresh,
+                        contentDescription = "重置",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+                
+                // 开始/暂停按钮
+                IconButton(
+                    onClick = { isTimerRunning = !isTimerRunning },
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .background(if (isTimerRunning) progressColor.copy(alpha = 0.8f) else progressColor)
+                ) {
+                    Icon(
+                        if (isTimerRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = if (isTimerRunning) "暂停" else "开始",
+                        tint = Color.White,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+                
+                // 跳过按钮
+                IconButton(
+                    onClick = {
+                        when (currentMode) {
+                            "WORK" -> {
+                                completedPomodoros++
+                                if (completedPomodoros % 4 == 0) {
+                                    currentMode = "LONG_BREAK"
+                                    remainingTimeMs = 15 * 60 * 1000L
+                                } else {
+                                    currentMode = "SHORT_BREAK"
+                                    remainingTimeMs = 5 * 60 * 1000L
+                                }
+                            }
+                            "SHORT_BREAK", "LONG_BREAK" -> {
+                                currentMode = "WORK"
+                                remainingTimeMs = 25 * 60 * 1000L
+                            }
+                        }
+                        isTimerRunning = false
+                    },
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "跳过",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // 密码输入框
+            Text(
+                text = "输入密码解锁设备",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
+            
+            TextField(
+                value = inputPassword,
+                onValueChange = {
+                    inputPassword = it
+                    isPasswordError = false
+                },
+                visualTransformation = PasswordVisualTransformation(),
+                isError = isPasswordError,
+                label = { Text("密码") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(0.8f),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.NumberPassword,
+                    imeAction = ImeAction.Done
+                ),
+                keyboardActions = KeyboardActions(
+                    onDone = {
+                        if (inputPassword == password) {
+                            isTimerRunning = false
+                            isUnlocking = true
+                            onUnlock()
+                        } else {
+                            isPasswordError = true
+                        }
+                    }
+                )
+            )
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            Button(
+                onClick = {
+                    if (inputPassword == password) {
+                        // 在解锁前停止所有进行中的操作
+                        isTimerRunning = false
+                        isUnlocking = true
+                        onUnlock()
+                    } else {
+                        isPasswordError = true
+                    }
+                }
+            ) {
+                Text(
+                    text = "解锁",
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)
+                )
+            }
+            
+            if (isPasswordError) {
+                Text(
+                    text = "密码错误，请重试",
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 4.dp),
+                    textAlign = TextAlign.Center
+                )
+            }
+            
+            // 添加底部空白，确保在小屏幕设备上所有内容都可见
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 } 
