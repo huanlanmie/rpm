@@ -250,28 +250,27 @@ class DeviceStatusCheckService : Service() {
                         Log.d(TAG, "[$currentTime] API请求成功(${requestTime}ms) - 设备状态: ${serverDevice.deviceStatus}")
                         
                         // 更新UI必须在主线程
-                        handler.post {
-                            // 设备状态不同时才执行操作，避免无谓的操作
-                            if (serverDevice.deviceStatus == 0L) {
-                                Log.d(TAG, "[$currentTime] 服务器要求锁定设备 - 当前设备未锁定，执行锁定操作")
-                                screenManager.lockDevice(deviceToken)
-                                updateNotification("设备已锁定")
-                            } else if (serverDevice.deviceStatus == 1L ) {
-                                Log.d(TAG, "[$currentTime] 服务器要求解锁设备 - 当前设备已锁定，执行解锁操作")
-                                screenManager.unlockDevice(deviceToken)
-                                updateNotification("设备已解锁")
-                            } else {
-                                // 状态没变化，只更新通知
-                                screenManager.lockDevice(deviceToken)
-                                val statusText = if (serverDevice.deviceStatus == 0L) "锁定" else "正常"
-                                val actionText = if (serverDevice.deviceStatus == 0L) 
-                                    "服务器要求锁定但设备已锁定，无需操作"
-                                else 
-                                    "服务器要求解锁但设备已解锁，无需操作"
-                                Log.d(TAG, "[$currentTime] $actionText")
-                                updateNotification("设备状态: $statusText")
-                            }
+                        // 设备状态不同时才执行操作，避免无谓的操作
+                        if (serverDevice.deviceStatus == 0L) {
+                            Log.d(TAG, "[$currentTime] 服务器要求锁定设备 - 当前设备未锁定，执行锁定操作")
+                            screenManager.lockDevice(deviceToken)
+                            updateNotification("设备已锁定")
+                        } else if (serverDevice.deviceStatus == 1L ) {
+                            Log.d(TAG, "[$currentTime] 服务器要求解锁设备 - 当前设备已锁定，执行解锁操作")
+                            screenManager.unlockDevice(deviceToken)
+                            updateNotification("设备已解锁")
+                        } else {
+                            // 状态没变化，只更新通知
+                            screenManager.lockDevice(deviceToken)
+                            val statusText = if (serverDevice.deviceStatus == 0L) "锁定" else "正常"
+                            val actionText = if (serverDevice.deviceStatus == 0L)
+                                "服务器要求锁定但设备已锁定，无需操作"
+                            else
+                                "服务器要求解锁但设备已解锁，无需操作"
+                            Log.d(TAG, "[$currentTime] $actionText")
+                            updateNotification("设备状态: $statusText")
                         }
+
                         
                         // 成功检查后重置失败计数
                         if (consecutiveFailures > 0) {

@@ -2,10 +2,15 @@ package com.ljh.phonemanage.ui
 
 import android.app.Activity
 import android.app.ActivityManager
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ActivityInfo
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
@@ -46,6 +51,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ljh.phonemanage.MainActivity
+import com.ljh.phonemanage.data.repository.DeviceRepository
+import com.ljh.phonemanage.manager.DeviceManager
 import com.ljh.phonemanage.service.LockScreenService
 import com.ljh.phonemanage.ui.theme.PhoneManageTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -55,7 +62,11 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.TimeUnit
+import javax.inject.Inject
 import kotlin.random.Random
 
 @AndroidEntryPoint
@@ -64,8 +75,42 @@ class LockScreenActivity : ComponentActivity() {
     private var isLocked = true
     private val TAG = "LockScreenActivity"
     
+    // 添加依赖注入
+    @Inject
+    lateinit var deviceRepository: DeviceRepository
+    
+    @Inject
+    lateinit var deviceManager: DeviceManager
+    
+    // 定时器相关变量
+    private val handler = Handler(Looper.getMainLooper())
+    private val checkStatusRunnable = Runnable { checkDeviceStatus() }
+    private var deviceCheckJob: Job? = null
+    private val checkIntervalMs = TimeUnit.SECONDS.toMillis(5) // 每5秒检查一次
+    
+    // 关闭广播接收器
+    private val closeReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            Log.d(TAG, "收到关闭广播，准备结束活动")
+            isLocked = false  // 设置为已解锁，避免onPause中重新激活
+            finish()
+        }
+    }
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Log.d(TAG, "锁屏活动创建")
+        
+        // 安全获取intent
+        val intentExtra = intent?.getBooleanExtra("finish", false) ?: false
+        
+        // 检查是否是解锁请求
+        if (intentExtra) {
+            Log.d(TAG, "收到结束标志，正在关闭")
+            isLocked = false  // 设置为已解锁，避免onPause中重新激活
+            finish()
+            return
+        }
         
         // 获取ActivityManager
         activityManager = getSystemService(ACTIVITY_SERVICE) as ActivityManager
@@ -123,8 +168,16 @@ class LockScreenActivity : ComponentActivity() {
             }
         }
         
+        try {
+            // 注册关闭广播接收器
+            registerReceiver(closeReceiver, IntentFilter("com.ljh.phonemanage.CLOSE_LOCK_SCREEN"))
+            Log.d(TAG, "广播接收器注册成功")
+        } catch (e: Exception) {
+            Log.e(TAG, "广播接收器注册失败", e)
+        }
+        
         // 获取传入的密码，如果没有则生成随机6位数密码
-        val passedPassword = intent.getStringExtra(LockScreenService.EXTRA_PASSWORD)
+        val passedPassword = intent?.getStringExtra(LockScreenService.EXTRA_PASSWORD)
         val password = if (passedPassword.isNullOrEmpty()) {
             generateRandomPassword()
         } else {
@@ -140,31 +193,7 @@ class LockScreenActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     LockScreenContent(password) {
-                        // 解锁时立即设置isLocked为false，停止监控
-                        isLocked = false
-                        
-                        // 停止锁定任务模式（如果之前启动了）
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                            try {
-                                stopLockTask()
-                            } catch (e: Exception) {
-                                Log.e(TAG, "停止锁定任务失败", e)
-                            }
-                        }
-                        
-                        // 启动主活动并结束锁屏活动
-                        CoroutineScope(Dispatchers.Main).launch {
-                            delay(300) // 短暂延迟以展示退出动画
-                            
-                            // 创建启动主活动的Intent
-                            val mainIntent = Intent(this@LockScreenActivity, MainActivity::class.java).apply {
-                                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
-                            }
-                            startActivity(mainIntent)
-                            
-                            // 结束当前活动
-                            finish()
-                        }
+                        handleUnlock()
                     }
                 }
             }
@@ -172,6 +201,109 @@ class LockScreenActivity : ComponentActivity() {
         
         // 启动监控任务
         startMonitoring()
+        
+        // 启动后端设备状态检查定时器
+        startDeviceStatusChecker()
+    }
+    
+    // 处理解锁操作
+    private fun handleUnlock() {
+        // 解锁时立即设置isLocked为false，停止监控
+        isLocked = false
+        
+        // 停止设备状态检查
+        stopDeviceStatusChecker()
+        
+        // 停止锁定任务模式（如果之前启动了）
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            try {
+                stopLockTask()
+            } catch (e: Exception) {
+                Log.e(TAG, "停止锁定任务失败", e)
+            }
+        }
+        
+        // 启动主活动并结束锁屏活动
+        CoroutineScope(Dispatchers.Main).launch {
+            delay(300) // 短暂延迟以展示退出动画
+            
+            // 创建启动主活动的Intent
+            val mainIntent = Intent(this@LockScreenActivity, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(mainIntent)
+            
+            // 结束当前活动
+            finish()
+        }
+    }
+    
+    // 启动设备状态检查定时器
+    private fun startDeviceStatusChecker() {
+        Log.d(TAG, "启动设备状态检查定时器，间隔: ${checkIntervalMs}ms")
+        
+        deviceCheckJob = CoroutineScope(Dispatchers.IO).launch {
+            while (isLocked) {
+                try {
+                    checkDeviceStatus()
+                } catch (e: Exception) {
+                    Log.e(TAG, "设备状态检查出错: ${e.message}", e)
+                }
+                delay(checkIntervalMs)
+            }
+        }
+    }
+    
+    // 停止设备状态检查定时器
+    private fun stopDeviceStatusChecker() {
+        Log.d(TAG, "停止设备状态检查定时器")
+        deviceCheckJob?.cancel()
+        deviceCheckJob = null
+    }
+    
+    // 检查设备状态
+    private fun checkDeviceStatus() {
+        val currentTime = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
+        Log.d(TAG, "[$currentTime] 检查设备状态...")
+        
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                // 获取当前设备信息
+                val currentDeviceInfo = deviceManager.deviceInfo.value
+                if (currentDeviceInfo == null) {
+                    Log.e(TAG, "[$currentTime] 当前设备信息为空，无法检查设备状态")
+                    return@launch
+                }
+                
+                // 从服务器获取最新设备信息
+                val deviceToken = currentDeviceInfo.deviceToken
+                val result = deviceRepository.getDeviceInfo(deviceToken)
+                
+                if (result.isSuccess) {
+                    val serverDevice = result.getOrNull()
+                    if (serverDevice != null) {
+                        Log.d(TAG, "[$currentTime] 获取到服务器设备状态: ${serverDevice.deviceStatus}")
+                        
+                        // 如果服务器设备状态为1（正常/解锁），则解锁设备
+                        if (serverDevice.deviceStatus == 1L) {
+                            Log.d(TAG, "[$currentTime] 服务器设备状态为解锁，关闭锁屏页面")
+                            withContext(Dispatchers.Main) {
+                                handleUnlock()
+                            }
+                        } else {
+                            Log.d(TAG, "[$currentTime] 服务器设备状态为锁定，保持锁屏")
+                        }
+                    } else {
+                        Log.e(TAG, "[$currentTime] 服务器返回的设备信息为空")
+                    }
+                } else {
+                    val error = result.exceptionOrNull()
+                    Log.e(TAG, "[$currentTime] 获取设备信息失败: ${error?.message}", error)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "[$currentTime] 检查设备状态异常: ${e.message}", e)
+            }
+        }
     }
     
     // 生成随机6位数密码
@@ -222,7 +354,9 @@ class LockScreenActivity : ComponentActivity() {
     }
     
     override fun onBackPressed() {
-        // 不调用super，禁用返回键
+        // 禁用返回键
+        // 不调用super.onBackPressed()
+        Log.d(TAG, "返回键被禁用")
     }
     
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
@@ -251,8 +385,21 @@ class LockScreenActivity : ComponentActivity() {
     }
     
     override fun onDestroy() {
-        super.onDestroy()
+        Log.d(TAG, "锁屏活动销毁，isLocked=$isLocked")
+        
+        // 停止设备状态检查
+        stopDeviceStatusChecker()
+        
+        // 取消注册广播接收器
+        try {
+            unregisterReceiver(closeReceiver)
+            Log.d(TAG, "广播接收器注销成功")
+        } catch (e: Exception) {
+            Log.e(TAG, "取消注册接收器失败", e)
+        }
+        
         isLocked = false
+        super.onDestroy()
     }
 }
 

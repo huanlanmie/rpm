@@ -8,7 +8,8 @@ espressoCore = "3.6.1"
 lifecycleRuntimeKtx = "2.8.7"
 composeBom = "2024.04.01"
 androidActivity = "1.8.0"
-hiltWork = "1.2.0"  # 降级到 1.8.0 或其他兼容版本
+hiltWork = "1.2.0"
+firebaseAppdistributionGradle = "5.1.1"  # 降级到 1.8.0 或其他兼容版本
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -26,6 +27,7 @@ androidx-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit
 androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
 androidxActivityCompose = { module = "androidx.activity:activity-compose", version.ref = "androidActivity" }
 androidx-hilt-work = { group = "androidx.hilt", name = "hilt-work", version.ref = "hiltWork" }
+firebase-appdistribution-gradle = { group = "com.google.firebase", name = "firebase-appdistribution-gradle", version.ref = "firebaseAppdistributionGradle" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
