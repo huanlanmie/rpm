@@ -22,7 +22,7 @@ class ScreenManager @Inject constructor(
     val lockState: StateFlow<Boolean> = _lockState
     
     // 当前密码
-    private var currentPassword: String = "123456" // 测试时使用固定密码
+    private var currentPassword: String = "" 
     
     // 设备管理器引用，通过setter注入以避免循环依赖
     private var deviceManager: DeviceManager? = null
@@ -60,7 +60,7 @@ class ScreenManager @Inject constructor(
     /**
      * 解锁设备屏幕
      */
-    fun unlockDevice(deviceId: String) {
+    fun unlockDevice(deviceId: String = "") {
         try {
             val intent = Intent(context, LockScreenService::class.java).apply {
                 action = LockScreenService.ACTION_UNLOCK
