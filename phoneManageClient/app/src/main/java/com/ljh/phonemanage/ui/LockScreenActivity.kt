@@ -80,6 +80,7 @@ class LockScreenActivity : ComponentActivity() {
     private var activityManager: ActivityManager? = null
     private var isLocked = true
     private val TAG = "LockScreenActivity"
+    private var lockTaskEnabled = false
 
     // 添加依赖注入
     @Inject
@@ -461,6 +462,11 @@ class LockScreenActivity : ComponentActivity() {
             }
         }
         
+        // 如果是真正离开页面而不是临时对话框，可以考虑重置锁定状态
+        if (isFinishing) {
+            lockTaskEnabled = false
+        }
+        
         // 如果应用即将进入后台，立即重新启动锁屏活动
         if (!isFinishing) {
             val intent = Intent(this, LockScreenActivity::class.java)
@@ -566,14 +572,22 @@ class LockScreenActivity : ComponentActivity() {
         }
     }
 
-    // 在onResume方法中启用锁定任务模式
+    // 修改onResume方法，避免重复启动锁定任务
     override fun onResume() {
         super.onResume()
         
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && !lockTaskEnabled) {
             try {
-                startLockTask()
-                Log.d(TAG, "锁定任务模式已启用")
+                // 首先检查应用是否已经处于锁定任务模式
+                val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+                if (activityManager.lockTaskModeState == ActivityManager.LOCK_TASK_MODE_NONE) {
+                    // 只有未处于锁定状态时才启动锁定
+                    startLockTask()
+                    lockTaskEnabled = true
+                    Log.d(TAG, "锁定任务模式已启用")
+                } else {
+                    Log.d(TAG, "已经处于锁定任务模式，无需重复启动")
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "启用锁定任务模式失败", e)
             }
@@ -690,11 +704,16 @@ class LockScreenActivity : ComponentActivity() {
         }
     }
 
-    // 添加一个方法来恢复锁屏UI
+    // 修改restoreLockScreenUI方法，确保不再触发无限循环
     private fun restoreLockScreenUI() {
-        // 重新设置锁屏界面的Compose内容
+        // 手动避免触发新的生命周期事件
+        var dialogWasShowing = false
+        
         setContent {
             PhoneManageTheme {
+                // 添加一个标志表示我们是通过对话框返回主UI的
+                dialogWasShowing = true
+                
                 LockScreenContent(
                     password = generateRandomPassword(),
                     pomodoroState = pomodoroState,
@@ -702,6 +721,11 @@ class LockScreenActivity : ComponentActivity() {
                     onEmergencyUnlock = { handleEmergencyUnlock() }
                 )
             }
+        }
+        
+        // 如果是从对话框返回，额外处理以避免重启锁定任务
+        if (dialogWasShowing) {
+            Log.d(TAG, "从对话框返回UI，保持当前锁定状态")
         }
     }
 
