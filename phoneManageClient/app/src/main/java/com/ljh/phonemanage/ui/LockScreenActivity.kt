@@ -730,15 +730,15 @@ class LockScreenActivity : ComponentActivity() {
     }
 
     // 修改 LockScreenContent 函数，确保结构正确
-    @Composable
-    fun LockScreenContent(
-        password: String,
+@Composable
+fun LockScreenContent(
+    password: String,
         pomodoroState: PomodoroState,
         onUnlock: () -> Unit,
         onEmergencyUnlock: () -> Unit
-    ) {
+) {
         var isPasswordError by remember { mutableStateOf(false) }
-        var inputPassword by remember { mutableStateOf("") }
+    var inputPassword by remember { mutableStateOf("") }
         var isUnlocking by remember { mutableStateOf(false) }
         
         // 计算进度百分比
@@ -773,10 +773,10 @@ class LockScreenActivity : ComponentActivity() {
             exit = fadeOut(animationSpec = tween(300)) + shrinkVertically(animationSpec = tween(300)),
             modifier = Modifier.fillMaxSize()
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp)
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
                     .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -790,10 +790,10 @@ class LockScreenActivity : ComponentActivity() {
                         .padding(vertical = 8.dp)
                 ) {
                     Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
+        horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier.padding(8.dp)
-                    ) {
-                        Text(
+    ) {
+        Text(
                             text = "解锁密码",
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -845,15 +845,15 @@ class LockScreenActivity : ComponentActivity() {
                         val minutes = TimeUnit.MILLISECONDS.toMinutes(pomodoroState.remainingTimeMs)
                         val seconds = TimeUnit.MILLISECONDS.toSeconds(pomodoroState.remainingTimeMs) -
                                 TimeUnit.MINUTES.toSeconds(minutes)
-                        
-                        Text(
+
+        Text(
                             text = String.format("%02d:%02d", minutes, seconds),
                             fontSize = 40.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onBackground
-                        )
-                        
-                        Text(
+        )
+        
+        Text(
                             text = "已完成 ${pomodoroState.completedPomodoros} 个番茄",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
@@ -993,27 +993,27 @@ class LockScreenActivity : ComponentActivity() {
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 // 密码输入框
-                OutlinedTextField(
-                    value = inputPassword,
-                    onValueChange = { 
-                        inputPassword = it 
+        OutlinedTextField(
+            value = inputPassword,
+            onValueChange = { 
+                inputPassword = it
                         isPasswordError = false
                     },
                     label = { Text("输入密码") },
                     visualTransformation = PasswordVisualTransformation(),
-                    singleLine = true,
+            singleLine = true,
                     modifier = Modifier.fillMaxWidth(0.8f),
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.NumberPassword,
-                        imeAction = ImeAction.Done
-                    ),
-                    keyboardActions = KeyboardActions(
-                        onDone = {
-                            if (inputPassword == password) {
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.NumberPassword,
+                imeAction = ImeAction.Done
+            ),
+            keyboardActions = KeyboardActions(
+                onDone = {
+                    if (inputPassword == password) {
                                 pomodoroState.toggleTimer()
                                 isUnlocking = true
-                                onUnlock()
-                            } else {
+                        onUnlock()
+                    } else {
                                 isPasswordError = true
                             }
                         }
@@ -1023,9 +1023,9 @@ class LockScreenActivity : ComponentActivity() {
                         { Text("密码错误，请重试") }
                     } else null
                 )
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
                 // 将解锁按钮和紧急解锁按钮放在同一行
                 Row(
                     modifier = Modifier
@@ -1034,14 +1034,14 @@ class LockScreenActivity : ComponentActivity() {
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     // 解锁按钮
-                    Button(
-                        onClick = {
-                            if (inputPassword == password) {
+        Button(
+            onClick = {
+                if (inputPassword == password) {
                                 // 在解锁前停止所有进行中的操作
                                 pomodoroState.toggleTimer()
                                 isUnlocking = true
-                                onUnlock()
-                            } else {
+                    onUnlock()
+                } else {
                                 isPasswordError = true
                             }
                         },
@@ -1059,7 +1059,7 @@ class LockScreenActivity : ComponentActivity() {
                     Button(
                         onClick = onEmergencyUnlock,
                         modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(
+            colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.errorContainer
                         )
                     ) {

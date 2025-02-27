@@ -2,4 +2,9 @@
 <resources>
 
     <style name="Theme.PhoneManage" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <style name="Theme.PhoneManage.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+    </style>
 </resources>
