@@ -15,10 +15,10 @@ import java.util.Date
  */
 object ApiClient {
     // 如果使用Android模拟器:
-    private const val BASE_URL = "http://192.168.1.7:18888/"  // 10.0.2.2是Android模拟器访问主机的特殊IP
+//    private const val BASE_URL = "http://192.168.1.7:18888/"  // 10.0.2.2是Android模拟器访问主机的特殊IP
     
     // 如果使用真机通过USB连接:
-    // private const val BASE_URL = "http://你电脑的局域网IP:18888/"  // 例如 "http://192.168.1.100:18888/"
+     private const val BASE_URL = "https://rpm.bolglan.cn/"  // 例如 "http://192.168.1.100:18888/"
     
     // 创建OkHttpClient实例
     private val okHttpClient by lazy {

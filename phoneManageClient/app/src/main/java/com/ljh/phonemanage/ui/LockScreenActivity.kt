@@ -98,8 +98,8 @@ class LockScreenActivity : ComponentActivity() {
     private var deviceCheckJob: Job? = null
     private val checkIntervalMs = TimeUnit.SECONDS.toMillis(5) // 每5秒检查一次
     
-    // 添加一个协程作业变量，用于监控任务
-    private var monitoringJob: Job? = null
+    // 在Activity级别创建番茄状态
+    private val pomodoroState = PomodoroState()
     
     // 关闭广播接收器
     private val closeReceiver = object : BroadcastReceiver() {
@@ -109,9 +109,6 @@ class LockScreenActivity : ComponentActivity() {
             finish()
         }
     }
-    
-    // 在Activity级别创建番茄状态
-    private val pomodoroState = PomodoroState()
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -208,7 +205,8 @@ class LockScreenActivity : ComponentActivity() {
         
         try {
             // 注册关闭广播接收器
-            registerReceiver(closeReceiver, IntentFilter("com.ljh.phonemanage.CLOSE_LOCK_SCREEN"))
+            val filter = IntentFilter("com.ljh.phonemanage.CLOSE_LOCK_SCREEN")
+            registerReceiver(closeReceiver, filter)
             Log.d(TAG, "广播接收器注册成功")
         } catch (e: Exception) {
             Log.e(TAG, "广播接收器注册失败", e)
@@ -231,9 +229,6 @@ class LockScreenActivity : ComponentActivity() {
                 }
             }
         }
-        
-        // 启动监控任务
-        startMonitoring()
         
         // 启动后端设备状态检查定时器
         startDeviceStatusChecker()
@@ -262,40 +257,18 @@ class LockScreenActivity : ComponentActivity() {
         // 停止设备状态检查
         stopDeviceStatusChecker()
         
-        // 取消所有正在执行的协程
-        deviceCheckJob?.cancel()
-        monitoringJob?.cancel()
-        
-        // 确保注销广播接收器
-        try {
-            unregisterReceiver(closeReceiver)
-            Log.d(TAG, "已注销广播接收器")
-        } catch (e: Exception) {
-            Log.e(TAG, "注销广播接收器失败：可能已经注销", e)
-        }
-        
-        // 停止锁定任务模式（如果之前启动了）
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && lockTaskEnabled) {
             try {
                 stopLockTask()
-                Log.d(TAG, "已停止锁定任务模式")
+                lockTaskEnabled = false
+                Log.d(TAG, "已解除锁定任务模式")
             } catch (e: Exception) {
-                Log.e(TAG, "停止锁定任务失败", e)
+                Log.e(TAG, "解除锁定任务模式失败", e)
             }
         }
         
-        // 使用单次性操作避免多次启动
-        if (!isFinishing) {
-            Log.d(TAG, "准备结束锁屏活动并返回主页")
-            finish()
-            
-            // 启动主活动
-            val mainIntent = Intent(this, MainActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            }
-            startActivity(mainIntent)
-        }
+        // 确保活动结束
+        finish()
     }
     
     // 启动设备状态检查定时器
@@ -373,54 +346,6 @@ class LockScreenActivity : ComponentActivity() {
             .joinToString("")
     }
     
-    private fun startMonitoring() {
-        Log.d(TAG, "开始监控设备状态...")
-        
-        // 取消之前的监控任务（如果存在）
-        monitoringJob?.cancel()
-        
-        // 创建新的监控任务
-        monitoringJob = CoroutineScope(Dispatchers.IO).launch {
-            try {
-                Log.d(TAG, "监控任务已启动")
-                
-                while (isActive && isLocked) {
-                    // 每隔一段时间检查一次锁屏状态是否需要维持
-                    delay(5000) // 每5秒检查一次
-                    
-                    // 检查应用是否仍然需要保持在前台
-                    if (isLocked) {
-                        Log.d(TAG, "监控检查: 设备仍处于锁定状态")
-                        
-                        // 确保应用仍在前台
-                        withContext(Dispatchers.Main) {
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                                try {
-                                    // 检查锁定任务状态，如有必要再次调用
-                                    if (activityManager?.isInLockTaskMode != true) {
-                                        Log.d(TAG, "监控检测到非锁定任务模式，尝试重新锁定")
-                                        startLockTask()
-                                    }
-                                } catch (e: Exception) {
-                                    Log.e(TAG, "重新锁定任务失败", e)
-                                }
-                            }
-                        }
-                    } else {
-                        Log.d(TAG, "监控检查: 设备已解锁，停止监控")
-                        break
-                    }
-                }
-            } catch (e: CancellationException) {
-                Log.d(TAG, "监控任务被取消")
-            } catch (e: Exception) {
-                Log.e(TAG, "监控任务异常", e)
-            } finally {
-                Log.d(TAG, "监控任务结束")
-            }
-        }
-    }
-    
     override fun onBackPressed() {
         // 不调用super.onBackPressed()，返回键失效
         Log.d(TAG, "返回键被禁用")
@@ -439,39 +364,40 @@ class LockScreenActivity : ComponentActivity() {
     
     override fun onPause() {
         super.onPause()
-        // 确保在页面暂停时停止计时器
-        pomodoroState.stopTimer()
-        Log.d(TAG, "锁屏页面暂停，已停止计时器")
-        if (isLocked) {
+        
+        Log.d(TAG, "onPause: isLocked=$isLocked, isFinishing=$isFinishing")
+        
+        // 关键改动: 只有在仍然锁定且活动没有结束的情况下才尝试重新激活
+        if (isLocked && !isFinishing) {
             try {
-                // 获取当前应用的任务信息
-                val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-                val taskList = am.getRunningTasks(10) // 获取运行中的前10个任务
-                
-                // 查找当前应用的任务ID
-                for (taskInfo in taskList) {
-                    if (taskInfo.topActivity?.packageName == packageName) {
-                        // 找到当前应用的任务，将其移至前台
-                        am.moveTaskToFront(taskInfo.id, 0)
-                        Log.d(TAG, "已将应用任务移至前台")
-                        break
+                // 避免立即重新激活，给予一点延迟让其他流程完成
+                handler.postDelayed({
+                    // 再次检查锁定状态，确保在延迟期间没有解锁
+                    if (isLocked && !isFinishing) {
+                        Log.d(TAG, "尝试重新激活锁屏")
+                        startActivity(Intent(this, LockScreenActivity::class.java).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        })
+                    } else {
+                        Log.d(TAG, "锁屏已解锁或正在结束，不再重新激活")
                     }
-                }
+                }, 200) // 添加200ms延迟
             } catch (e: Exception) {
-                Log.e(TAG, "尝试将任务移至前台时发生错误", e)
+                Log.e(TAG, "重新激活锁屏失败", e)
             }
-        }
-        
-        // 如果是真正离开页面而不是临时对话框，可以考虑重置锁定状态
-        if (isFinishing) {
-            lockTaskEnabled = false
-        }
-        
-        // 如果应用即将进入后台，立即重新启动锁屏活动
-        if (!isFinishing) {
-            val intent = Intent(this, LockScreenActivity::class.java)
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            startActivity(intent)
+        } else {
+            // 已解锁或正在结束，尝试解除锁定任务模式
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && lockTaskEnabled) {
+                try {
+                    stopLockTask()
+                    lockTaskEnabled = false
+                    Log.d(TAG, "已解除锁定任务模式")
+                } catch (e: Exception) {
+                    Log.e(TAG, "解除锁定任务模式失败", e)
+                }
+            }
+            
+            Log.d(TAG, "锁屏已解锁或正在结束，允许页面关闭")
         }
     }
     
@@ -499,24 +425,21 @@ class LockScreenActivity : ComponentActivity() {
     }
     
     override fun onDestroy() {
+        super.onDestroy()
+        try {
+            unregisterReceiver(closeReceiver)
+        } catch (e: Exception) {
+            Log.e(TAG, "解除广播接收器注册失败", e)
+        }
+
+        // 不再需要解注册lockTaskReceiver
+        
         // 确保销毁时停止计时器
         pomodoroState.stopTimer()
         Log.d(TAG, "锁屏页面销毁，已停止计时器")
         Log.d(TAG, "锁屏活动销毁，isLocked=$isLocked")
         
-        // 停止设备状态检查
-        stopDeviceStatusChecker()
-        
-        // 取消注册广播接收器
-        try {
-            unregisterReceiver(closeReceiver)
-            Log.d(TAG, "广播接收器注销成功")
-        } catch (e: Exception) {
-            Log.e(TAG, "取消注册接收器失败", e)
-        }
-        
         isLocked = false
-        super.onDestroy()
     }
     
     // 增强手势拦截效果，不仅拦截上划，也拦截所有可能的导航手势
@@ -572,24 +495,23 @@ class LockScreenActivity : ComponentActivity() {
         }
     }
 
-    // 修改onResume方法，避免重复启动锁定任务
+    // 保留简化版的onResume方法，使用安全的启动锁定方式
     override fun onResume() {
         super.onResume()
         
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && !lockTaskEnabled) {
+        // 简化锁定逻辑，增加异常处理
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && !isFinishing) {
             try {
                 // 首先检查应用是否已经处于锁定任务模式
                 val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
                 if (activityManager.lockTaskModeState == ActivityManager.LOCK_TASK_MODE_NONE) {
-                    // 只有未处于锁定状态时才启动锁定
                     startLockTask()
                     lockTaskEnabled = true
                     Log.d(TAG, "锁定任务模式已启用")
-                } else {
-                    Log.d(TAG, "已经处于锁定任务模式，无需重复启动")
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "启用锁定任务模式失败", e)
+                Log.e(TAG, "启用锁定任务模式失败: ${e.message}", e)
+                // 继续执行，不阻断应用流程
             }
         }
     }
