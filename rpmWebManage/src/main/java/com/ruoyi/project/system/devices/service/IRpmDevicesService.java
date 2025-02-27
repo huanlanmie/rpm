@@ -43,6 +43,15 @@ public interface IRpmDevicesService
      */
     public int updateRpmDevices(RpmDevices rpmDevices);
 
+
+    /**
+     * 紧急解锁设备
+     *
+     * @param rpmDevices 存储用户的设备信息
+     * @return 结果
+     */
+    public int exigencyUnlockDevices(RpmDevices rpmDevices);
+
     /**
      * 批量删除存储用户的设备信息
      * 

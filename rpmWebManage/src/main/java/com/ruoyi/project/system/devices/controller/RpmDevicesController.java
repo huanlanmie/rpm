@@ -169,4 +169,20 @@ public class RpmDevicesController extends BaseController
     {
         return toAjax(rpmDevicesService.deleteRpmDevicesByIds(ids));
     }
+
+    /**
+     * 切换设备状态
+     */
+    @Log(title = "存储用户的设备信息", businessType = BusinessType.UPDATE)
+    @PostMapping("/toggleStatus/{id}")
+    @ResponseBody
+    public AjaxResult toggleStatus(@PathVariable("id") Long id) {
+        RpmDevices rpmDevices = rpmDevicesService.selectRpmDevicesById(id);
+        if (rpmDevices == null) {
+            return AjaxResult.error("设备不存在");
+        }
+        // 假设设备状态为1表示启用，0表示禁用
+        rpmDevices.setDeviceStatus(rpmDevices.getDeviceStatus() == 1L ? 0L : 1L);
+        return toAjax(rpmDevicesService.updateRpmDevices(rpmDevices));
+    }
 }

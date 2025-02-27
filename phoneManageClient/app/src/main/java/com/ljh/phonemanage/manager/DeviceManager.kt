@@ -200,7 +200,6 @@ class DeviceManager @Inject constructor(
                 val updatedInfo = currentInfo.copy(
                     status = 1L,
                     lastSeen = Date(),
-                    deviceStatus = if (screenManager.lockState.value) 1 else 0
                 )
                 
                 val result = deviceRepository.updateDeviceStatus(updatedInfo)

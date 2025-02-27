@@ -1,4 +1,3 @@
-<!DOCTYPE html>
 <html lang="zh" xmlns:th="http://www.thymeleaf.org" xmlns:shiro="http://www.pollix.at/thymeleaf/shiro">
 <head>
     <th:block th:include="include :: header('存储用户的设备信息列表')" />
@@ -138,12 +137,30 @@
                         var actions = [];
                         actions.push('<a class="btn btn-success btn-xs ' + editFlag + '" href="javascript:void(0)" onclick="$.operate.edit(\'' + row.id + '\')"><i class="fa fa-edit"></i>编辑</a> ');
                         actions.push('<a class="btn btn-danger btn-xs ' + removeFlag + '" href="javascript:void(0)" onclick="$.operate.remove(\'' + row.id + '\')"><i class="fa fa-remove"></i>删除</a>');
+                        // 添加设备状态开关
+                        actions.push('<label class="switch"><input type="checkbox" onclick="toggleDeviceStatus(\'' + row.id + '\')"><span class="slider round"></span></label>');
                         return actions.join('');
                     }
                 }]
             };
             $.table.init(options);
         });
+
+        // 设备状态切换函数
+        function toggleDeviceStatus(id) {
+            $.ajax({
+                url: prefix + "/toggleStatus/" + id,
+                type: "post",
+                success: function(result) {
+                    if (result.code === 0) {
+                        $.modal.msgSuccess(result.msg);
+                        $.table.refresh();
+                    } else {
+                        $.modal.msgError(result.msg);
+                    }
+                }
+            });
+        }
     </script>
 </body>
 </html>

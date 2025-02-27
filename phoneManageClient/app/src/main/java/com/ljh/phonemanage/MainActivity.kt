@@ -123,7 +123,7 @@ class MainActivity : ComponentActivity() {
     
     private fun startDeviceStatusCheckService() {
         // 启动设备状态检查服务
-        val serviceIntent = Intent(this, com.ljh.phonemanage.service.DeviceStatusCheckService::class.java)
+        val serviceIntent = Intent(this, DeviceStatusCheckService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(serviceIntent)
         } else {

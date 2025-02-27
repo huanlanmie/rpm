@@ -71,6 +71,23 @@ public class RpmDevicesServiceImpl implements IRpmDevicesService
         return rpmDevicesMapper.updateRpmDevices(rpmDevices);
     }
 
+    @Override
+    public int exigencyUnlockDevices(RpmDevices rpmDevices) {
+        // 开启一个定时器倒计时五分钟
+        new java.util.Timer().schedule(new java.util.TimerTask() {
+            @Override
+            public void run() {
+                // 修改设备的锁定状态
+                rpmDevices.setDeviceStatus(0L); // 假设锁定状态字段为lockStatus
+                rpmDevices.setUpdateTime(DateUtils.getNowDate());
+                rpmDevicesMapper.updateRpmDevices(rpmDevices);
+            }
+        }, 5 * 60 * 1000); // 5 minutes in milliseconds
+
+        rpmDevices.setUpdateTime(DateUtils.getNowDate());
+        return rpmDevicesMapper.updateRpmDevices(rpmDevices);
+    }
+
     /**
      * 批量删除存储用户的设备信息
      * 

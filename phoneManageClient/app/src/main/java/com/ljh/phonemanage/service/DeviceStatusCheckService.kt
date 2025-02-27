@@ -46,7 +46,7 @@ class DeviceStatusCheckService : Service() {
     // 使用协程执行网络请求
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     
-    // 默认检查间隔1分钟（60000毫秒）
+    // 默认检查间隔（10秒）
     private var checkIntervalMs = TimeUnit.SECONDS.toMillis(10)
     
     // 连续失败次数计数器
