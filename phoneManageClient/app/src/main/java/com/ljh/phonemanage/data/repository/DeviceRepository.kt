@@ -194,4 +194,37 @@ class DeviceRepository @Inject constructor() {
             Result.failure(e)
         }
     }
+    
+    /**
+     * 紧急解锁设备
+     */
+    suspend fun emergencyUnlockDevice(deviceId: String): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            // 获取当前设备信息
+            val deviceInfo = getDeviceInfo(deviceId).getOrNull() ?: return@withContext Result.failure(
+                Exception("获取设备信息失败")
+            )
+            
+            // 创建更新对象
+            val unlockRequest = deviceInfo.copy(
+                deviceStatus = 1L, // 解锁状态
+                updateTime = Date()
+            )
+            
+            // 调用紧急解锁API
+            val response = deviceApiService.emergencyUnlockDevice(unlockRequest)
+            
+            if (response.isSuccessful && response.body()?.isSuccess == true) {
+                Log.d(TAG, "紧急解锁请求成功")
+                Result.success(true)
+            } else {
+                val errorMsg = response.body()?.msg ?: "紧急解锁失败: ${response.code()} ${response.message()}"
+                Log.e(TAG, errorMsg)
+                Result.failure(Exception(errorMsg))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "紧急解锁异常", e)
+            Result.failure(e)
+        }
+    }
 } 

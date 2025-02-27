@@ -49,4 +49,10 @@ interface DeviceApiService {
      */
     @POST("system/lockevents/client-add")
     suspend fun reportLockEvent(@Body lockEvent: RpmLockevents): ApiResponse<Int>
+    
+    /**
+     * 紧急解锁设备
+     */
+    @POST("system/devices/client-emerge-unlock")
+    suspend fun emergencyUnlockDevice(@Body rpmDevices: RpmDevices): Response<AjaxResult>
 } 

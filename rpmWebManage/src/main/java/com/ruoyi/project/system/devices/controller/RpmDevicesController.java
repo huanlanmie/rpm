@@ -131,11 +131,10 @@ public class RpmDevicesController extends BaseController
     }
 
 
-
     /**
      * 修改保存存储用户的设备信息
      */
-//    @RequiresPermissions("system:devices:edit")
+    //@RequiresPermissions("system:devices:edit")
     @Log(title = "存储用户的设备信息", businessType = BusinessType.UPDATE)
     @PostMapping("/edit")
     @ResponseBody
@@ -148,6 +147,13 @@ public class RpmDevicesController extends BaseController
     @PostMapping("/client-edit")
     @ResponseBody
     public AjaxResult clientEditSave(@RequestBody RpmDevices rpmDevices)
+    {
+        return toAjax(rpmDevicesService.updateRpmDevices(rpmDevices));
+    }
+    @Log(title = "客户端紧急解锁", businessType = BusinessType.UPDATE)
+    @PostMapping("/client-emerge-unlock")
+    @ResponseBody
+    public AjaxResult clientEmergeUnlock(@RequestBody RpmDevices rpmDevices)
     {
         return toAjax(rpmDevicesService.updateRpmDevices(rpmDevices));
     }

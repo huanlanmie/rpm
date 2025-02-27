@@ -45,4 +45,10 @@ object AppModule {
     ): DeviceManagerInitializer {
         return DeviceManagerInitializer(screenManager, deviceManager)
     }
+    
+    @Provides
+    @Singleton
+    fun provideContext(@ApplicationContext appContext: Context): Context {
+        return appContext
+    }
 } 
