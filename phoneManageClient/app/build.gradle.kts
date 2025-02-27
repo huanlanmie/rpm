@@ -63,6 +63,7 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.7.6")
     implementation("com.google.dagger:hilt-android:2.48")
     implementation(libs.androidx.hilt.work)
+    implementation(libs.androidx.appcompat)
     kapt("com.google.dagger:hilt-android-compiler:2.48")
     implementation("androidx.hilt:hilt-navigation-compose:1.1.0")
     implementation("com.squareup.okhttp3:okhttp:4.10.0")

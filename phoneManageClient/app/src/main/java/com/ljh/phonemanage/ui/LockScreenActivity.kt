@@ -4,7 +4,6 @@ import android.app.Activity
 import android.app.ActivityManager
 import android.app.ProgressDialog
 import android.content.BroadcastReceiver
-import android.content.ContentValues.TAG
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -37,7 +36,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
@@ -46,14 +44,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ljh.phonemanage.MainActivity
@@ -244,6 +239,11 @@ class LockScreenActivity : ComponentActivity() {
         
         // 安排午夜重置任务
         emergencyUnlockManager.scheduleMidnightReset()
+        
+        // 检查各个依赖是否正确注入
+        Log.d(TAG, "emergencyUnlockManager 是否为空: ${emergencyUnlockManager == null}")
+        Log.d(TAG, "deviceManager 是否为空: ${deviceManager == null}")
+        Log.d(TAG, "deviceRepository 是否为空: ${deviceRepository == null}")
     }
     
     // 处理解锁操作
@@ -609,61 +609,177 @@ class LockScreenActivity : ComponentActivity() {
         }
     }
 
-    // 处理紧急解锁请求
+    // 修改handleEmergencyUnlock方法，使用Compose版本的AlertDialog
     private fun handleEmergencyUnlock() {
-        Log.d(TAG, "执行紧急解锁...")
+        Log.d(TAG, "准备执行紧急解锁...")
         
-        // 先检查今天的解锁次数是否已用完
-        if (!emergencyUnlockManager.canUnlockToday()) {
-            Toast.makeText(
-                this,
-                "您今天的紧急解锁次数已用完，请明天再试",
-                Toast.LENGTH_LONG
-            ).show()
-            return
-        }
-        
-        // 获取设备ID
-        val deviceInfo = deviceManager.deviceInfo.value
-        if (deviceInfo == null) {
-            Log.e(TAG, "无法执行紧急解锁：设备信息为空")
-            Toast.makeText(this, "解锁失败：无法获取设备信息", Toast.LENGTH_LONG).show()
-            return
-        }
-        
-        val deviceId = deviceInfo.deviceToken
-        
-        // 显示进度对话框
-        val progressDialog = ProgressDialog(this).apply {
-            setMessage("正在发送紧急解锁请求...")
-            setCancelable(false)
-            show()
-        }
-        
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val result = deviceRepository.emergencyUnlockDevice(deviceId)
-                
-                withContext(Dispatchers.Main) {
-                    progressDialog.dismiss()
+        try {
+            // 检查emergencyUnlockManager是否已初始化
+            if (emergencyUnlockManager == null) {
+                Log.e(TAG, "紧急解锁失败：emergencyUnlockManager为空")
+                Toast.makeText(this, "系统错误：未能初始化解锁管理器", Toast.LENGTH_LONG).show()
+                return
+            }
+            
+            // 检查今天的解锁次数是否已用完
+            if (!emergencyUnlockManager.canUnlockToday()) {
+                Toast.makeText(
+                    this,
+                    "您今天的紧急解锁次数已用完，请明天再试",
+                    Toast.LENGTH_LONG
+                ).show()
+                return
+            }
+            
+            // 获取剩余解锁次数
+            val remainingUnlocks = emergencyUnlockManager.remainingUnlocks.value
+            
+            // 使用Material3对话框来替代AppCompat对话框
+            setContent {
+                PhoneManageTheme {
+                    var showDialog by remember { mutableStateOf(true) }
                     
-                    if (result.isSuccess) {
-                        Log.d(TAG, "紧急解锁成功")
-                        Toast.makeText(this@LockScreenActivity, "紧急解锁成功", Toast.LENGTH_SHORT).show()
-                        handleUnlock()
-                    } else {
-                        val error = result.exceptionOrNull()
-                        Log.e(TAG, "紧急解锁失败: ${error?.message}", error)
-                        Toast.makeText(this@LockScreenActivity, "紧急解锁失败: ${error?.message}", Toast.LENGTH_LONG).show()
+                    if (showDialog) {
+                        AlertDialog(
+                            onDismissRequest = { 
+                                showDialog = false
+                                // 恢复锁屏界面
+                                restoreLockScreenUI()
+                            },
+                            title = { Text("紧急解锁确认") },
+                            text = { 
+                                Text(
+                                    "您确定要使用紧急解锁吗？\n\n" +
+                                    "今天剩余解锁次数：$remainingUnlocks" +
+                                    (if (remainingUnlocks <= 1) "\n\n⚠️ 这是今天最后的解锁机会" else "")
+                                ) 
+                            },
+                            confirmButton = {
+                                Button(
+                                    onClick = {
+                                        showDialog = false
+                                        performEmergencyUnlock()
+                                        // 恢复锁屏界面
+                                        restoreLockScreenUI()
+                                    }
+                                ) {
+                                    Text("确认")
+                                }
+                            },
+                            dismissButton = {
+                                Button(
+                                    onClick = { 
+                                        showDialog = false
+                                        // 恢复锁屏界面
+                                        restoreLockScreenUI()
+                                    }
+                                ) {
+                                    Text("取消")
+                                }
+                            }
+                        )
                     }
                 }
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    progressDialog.dismiss()
-                    Log.e(TAG, "紧急解锁异常", e)
-                    Toast.makeText(this@LockScreenActivity, "紧急解锁出现异常: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        } catch (e: Exception) {
+            // 捕获并记录任何异常
+            Log.e(TAG, "紧急解锁过程中发生异常", e)
+            Toast.makeText(this, "解锁失败：${e.message}", Toast.LENGTH_LONG).show()
+            // 确保恢复UI
+            restoreLockScreenUI()
+        }
+    }
+
+    // 添加一个方法来恢复锁屏UI
+    private fun restoreLockScreenUI() {
+        // 重新设置锁屏界面的Compose内容
+        setContent {
+            PhoneManageTheme {
+                LockScreenContent(
+                    password = generateRandomPassword(),
+                    pomodoroState = pomodoroState,
+                    onUnlock = { handleUnlock() },
+                    onEmergencyUnlock = { handleEmergencyUnlock() }
+                )
+            }
+        }
+    }
+
+    // 修改performEmergencyUnlock方法，增加错误处理
+    private fun performEmergencyUnlock() {
+        Log.d(TAG, "执行紧急解锁...")
+        
+        try {
+            // 获取设备ID
+            val deviceInfo = deviceManager?.deviceInfo?.value
+            if (deviceInfo == null) {
+                Log.e(TAG, "无法执行紧急解锁：设备信息为空")
+                Toast.makeText(this, "解锁失败：无法获取设备信息", Toast.LENGTH_LONG).show()
+                return
+            }
+            
+            val deviceId = deviceInfo.deviceToken
+            
+            // 显示进度对话框
+            val progressDialog = ProgressDialog(this).apply {
+                setMessage("正在发送紧急解锁请求...")
+                setCancelable(false)
+                show()
+            }
+            
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    // 确保deviceRepository不为空
+                    if (deviceRepository == null) {
+                        withContext(Dispatchers.Main) {
+                            progressDialog.dismiss()
+                            Log.e(TAG, "解锁失败：deviceRepository未初始化")
+                            Toast.makeText(this@LockScreenActivity, "系统错误：设备服务未初始化", Toast.LENGTH_LONG).show()
+                        }
+                        return@launch
+                    }
+                    
+                    val result = deviceRepository.emergencyUnlockDevice(deviceId)
+                    
+                    withContext(Dispatchers.Main) {
+                        progressDialog.dismiss()
+                        
+                        if (result.isSuccess) {
+                            try {
+                                // 记录解锁次数
+                                val remaining = emergencyUnlockManager.recordUnlock()
+                                
+                                Log.d(TAG, "紧急解锁成功，今日剩余次数：$remaining")
+                                Toast.makeText(
+                                    this@LockScreenActivity, 
+                                    "紧急解锁成功，今日剩余次数：$remaining", 
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                                
+                                handleUnlock()
+                            } catch (e: Exception) {
+                                Log.e(TAG, "记录解锁次数失败", e)
+                                Toast.makeText(this@LockScreenActivity, "解锁成功，但记录次数失败", Toast.LENGTH_SHORT).show()
+                                // 即使记录失败也继续解锁
+                                handleUnlock()
+                            }
+                        } else {
+                            val error = result.exceptionOrNull()
+                            Log.e(TAG, "紧急解锁失败: ${error?.message}", error)
+                            Toast.makeText(this@LockScreenActivity, "紧急解锁失败: ${error?.message}", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) {
+                        progressDialog.dismiss()
+                        Log.e(TAG, "紧急解锁异常", e)
+                        Toast.makeText(this@LockScreenActivity, "紧急解锁出现异常: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
                 }
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "准备紧急解锁过程中发生异常", e)
+            Toast.makeText(this, "解锁失败：${e.message}", Toast.LENGTH_LONG).show()
         }
     }
 
