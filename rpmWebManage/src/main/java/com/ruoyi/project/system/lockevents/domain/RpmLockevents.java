@@ -22,15 +22,15 @@ public class RpmLockevents extends BaseEntity
 
     /** 关联设备ID */
     @Excel(name = "关联设备ID")
-    private Long deviceId;
+    private String deviceId;
 
     /** 锁定代码（6位数密码） */
     @Excel(name = "锁定代码", readConverterExp = "6=位数密码")
     private String lockCode;
 
     /** 锁定时间 */
-    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
-    @Excel(name = "锁定时间", width = 30, dateFormat = "yyyy-MM-dd")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    @Excel(name = "锁定时间", width = 30, dateFormat = "yyyy-MM-dd HH:mm:ss")
     private Date lockedAt;
 
     public void setId(Long id) 
@@ -43,12 +43,12 @@ public class RpmLockevents extends BaseEntity
         return id;
     }
 
-    public void setDeviceId(Long deviceId) 
+    public void setDeviceId(String deviceId)
     {
         this.deviceId = deviceId;
     }
 
-    public Long getDeviceId() 
+    public String getDeviceId()
     {
         return deviceId;
     }

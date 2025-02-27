@@ -125,15 +125,7 @@ class DeviceManager @Inject constructor(
         return deviceToken
     }
     
-    /**
-     * 获取设备ID - 已不再使用
-     * 保留此方法仅用于参考
-     */
-    @Deprecated("使用DeviceIdUtil.getDeviceId()替代", ReplaceWith("DeviceIdUtil.getDeviceId(context)"))
-    private fun getDeviceId(): String {
-        return Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
-    }
-    
+
     /**
      * 创建设备信息对象
      */

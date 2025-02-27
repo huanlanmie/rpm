@@ -23,8 +23,6 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <select id="selectRpmLockeventsList" parameterType="RpmLockevents" resultMap="RpmLockeventsResult">
         <include refid="selectRpmLockeventsVo"/>
         <where>  
-            <if test="deviceId != null "> and device_id = #{deviceId}</if>
-            <if test="lockCode != null  and lockCode != ''"> and lock_code = #{lockCode}</if>
             <if test="lockedAt != null "> and locked_at = #{lockedAt}</if>
         </where>
     </select>

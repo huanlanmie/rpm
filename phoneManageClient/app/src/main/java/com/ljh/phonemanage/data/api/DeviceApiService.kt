@@ -1,12 +1,12 @@
 package com.ljh.phonemanage.data.api
 
 import com.ljh.phonemanage.data.model.RpmDevices
+import com.ljh.phonemanage.data.model.RpmLockevents
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
-import retrofit2.http.Query
 
 /**
  * 设备API接口
@@ -43,4 +43,10 @@ interface DeviceApiService {
      */
     @POST("system/devices/client-edit")
     suspend fun updateDeviceStatus(@Body rpmDevices: RpmDevices): Response<AjaxResult>
+    
+    /**
+     * 上报锁屏事件
+     */
+    @POST("system/lockevents/client-add")
+    suspend fun reportLockEvent(@Body lockEvent: RpmLockevents): ApiResponse<Int>
 } 

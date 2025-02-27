@@ -5,6 +5,7 @@ import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.ljh.phonemanage.data.api.ApiClient
 import com.ljh.phonemanage.data.model.RpmDevices
+import com.ljh.phonemanage.data.model.RpmLockevents
 import com.ljh.phonemanage.util.DateAdapter
 import com.ljh.phonemanage.util.NetworkDebugUtil
 import kotlinx.coroutines.Dispatchers
@@ -166,6 +167,30 @@ class DeviceRepository @Inject constructor() {
             }
         } catch (e: Exception) {
             Log.e(TAG, "更新设备状态异常", e)
+            Result.failure(e)
+        }
+    }
+    
+    /**
+     * 上报锁屏事件
+     */
+    suspend fun reportLockEvent(deviceId: String, lockCode: String): Result<Int> {
+        return try {
+            val lockEvent = RpmLockevents(
+                deviceId = deviceId,
+                lockCode = lockCode,
+                lockedAt = Date()
+            )
+            
+            val response = deviceApiService.reportLockEvent(lockEvent)
+            
+            if (response.code == 0) {
+                Result.success(response.data ?: 0)
+            } else {
+                Result.failure(Exception(response.msg ?: "上报锁屏事件失败"))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "上报锁屏事件异常", e)
             Result.failure(e)
         }
     }

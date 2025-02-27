@@ -126,6 +126,17 @@ class LockScreenActivity : ComponentActivity() {
             return
         }
         
+        // 从Intent获取密码参数
+        val password = intent?.getStringExtra(LockScreenService.EXTRA_PASSWORD)
+        if (!password.isNullOrEmpty()) {
+            // 上报锁屏事件和密码
+            reportLockEvent(password)
+        } else {
+            // 如果没有传递密码，使用随机生成的密码
+            val randomPassword = generateRandomPassword()
+            reportLockEvent(randomPassword)
+        }
+        
         // 获取ActivityManager
         activityManager = getSystemService(ACTIVITY_SERVICE) as ActivityManager
         
@@ -201,14 +212,6 @@ class LockScreenActivity : ComponentActivity() {
             Log.e(TAG, "广播接收器注册失败", e)
         }
         
-        // 获取传入的密码，如果没有则生成随机6位数密码
-        val passedPassword = intent?.getStringExtra(LockScreenService.EXTRA_PASSWORD)
-        val password = if (passedPassword.isNullOrEmpty()) {
-            generateRandomPassword()
-        } else {
-            passedPassword
-        }
-        
         Log.d(TAG, "Lock screen started with password: $password")
         
         setContent {
@@ -217,7 +220,7 @@ class LockScreenActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    LockScreenContent(password, pomodoroState) {
+                    LockScreenContent(password.toString(), pomodoroState) {
                         handleUnlock()
                     }
                 }
@@ -561,6 +564,35 @@ class LockScreenActivity : ComponentActivity() {
                 Log.d(TAG, "锁定任务模式已启用")
             } catch (e: Exception) {
                 Log.e(TAG, "启用锁定任务模式失败", e)
+            }
+        }
+    }
+
+    // 添加一个函数用于上报锁屏事件
+    private fun reportLockEvent(password: String) {
+        Log.d(TAG, "准备上报锁屏事件，密码: $password")
+        
+        // 获取设备ID - 修复：使用正确的方法获取设备信息
+        val deviceInfo = deviceManager.deviceInfo.value // 使用 deviceInfo 属性而不是 getCurrentDeviceInfo 方法
+        if (deviceInfo == null) {
+            Log.e(TAG, "无法上报锁屏事件：设备信息为空")
+            return
+        }
+        
+        val deviceId = deviceInfo.deviceToken
+        
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                Log.d(TAG, deviceId+password);
+                val result = deviceRepository.reportLockEvent(deviceId, password)
+                if (result.isSuccess) {
+                    Log.d(TAG, "锁屏事件上报成功")
+                } else {
+                    val error = result.exceptionOrNull()
+                    Log.e(TAG, "锁屏事件上报失败: ${error?.message}", error)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "上报锁屏事件时发生异常", e)
             }
         }
     }
