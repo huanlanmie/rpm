@@ -143,7 +143,7 @@ class DeviceRepository @Inject constructor() {
             val statusUpdateInfo = rpmDevices.copy(
                 lastSeen = currentTime,
                 updateTime = currentTime,
-                status = "online"
+                status = 1L
             )
             Log.d(TAG, "更新对象数据，当前时间: ${statusUpdateInfo}")
             

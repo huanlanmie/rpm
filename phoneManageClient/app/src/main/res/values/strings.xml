@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">小慧定制</string>
+    <string name="device_admin_label">设备管理</string>
+    <string name="device_admin_description">允许应用控制屏幕锁定</string>
 </resources>

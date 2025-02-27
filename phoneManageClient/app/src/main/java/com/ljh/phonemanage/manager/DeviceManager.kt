@@ -152,7 +152,7 @@ class DeviceManager @Inject constructor(
             deviceStatus = if (screenManager.lockState.value) 1 else 0,
             osVersion = "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})",
             appVersion = appVersion,
-            status = "online",
+            status = 1L,
             lastSeen = Date()
         )
     }
@@ -206,7 +206,7 @@ class DeviceManager @Inject constructor(
         coroutineScope.launch {
             try {
                 val updatedInfo = currentInfo.copy(
-                    status = "online",
+                    status = 1L,
                     lastSeen = Date(),
                     deviceStatus = if (screenManager.lockState.value) 1 else 0
                 )

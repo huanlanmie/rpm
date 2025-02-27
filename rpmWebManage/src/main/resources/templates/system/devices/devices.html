@@ -38,10 +38,6 @@
                                 <input type="text" name="appVersion"/>
                             </li>
                             <li>
-                                <label>最近一次在线时间：</label>
-                                <input type="text" class="time-input" placeholder="请选择最近一次在线时间" name="lastSeen"/>
-                            </li>
-                            <li>
                                 <a class="btn btn-primary btn-rounded btn-sm" onclick="$.table.search()"><i class="fa fa-search"></i>&nbsp;搜索</a>
                                 <a class="btn btn-warning btn-rounded btn-sm" onclick="$.form.reset()"><i class="fa fa-refresh"></i>&nbsp;重置</a>
                             </li>
@@ -74,6 +70,7 @@
         var editFlag = [[${@permission.hasPermi('system:devices:edit')}]];
         var removeFlag = [[${@permission.hasPermi('system:devices:remove')}]];
         var deviceStatusDatas = [[${@dict.getType('rpm_device_status')}]];
+        var deviceOnlineStatusDatas = [[${@dict.getType('rpm_device_online_status')}]];
         var prefix = ctx + "system/devices";
 
         $(function() {
@@ -121,7 +118,10 @@
                 },
                 {
                     field: 'status',
-                    title: '在线状态'
+                    title: '在线状态',
+                    formatter: function(value, row, index) {
+                        return $.table.selectDictLabel(deviceOnlineStatusDatas, value);
+                    }
                 },
                 {
                     field: 'lastSeen',

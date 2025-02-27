@@ -75,6 +75,7 @@ import kotlin.random.Random
 import kotlinx.coroutines.CancellationException
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
+import kotlinx.coroutines.isActive
 
 @AndroidEntryPoint
 class LockScreenActivity : ComponentActivity() {
@@ -94,6 +95,9 @@ class LockScreenActivity : ComponentActivity() {
     private val checkStatusRunnable = Runnable { checkDeviceStatus() }
     private var deviceCheckJob: Job? = null
     private val checkIntervalMs = TimeUnit.SECONDS.toMillis(5) // 每5秒检查一次
+    
+    // 添加一个协程作业变量，用于监控任务
+    private var monitoringJob: Job? = null
     
     // 关闭广播接收器
     private val closeReceiver = object : BroadcastReceiver() {
@@ -178,6 +182,17 @@ class LockScreenActivity : ComponentActivity() {
             }
         }
         
+        // 防止截屏和录屏
+        window.setFlags(
+            WindowManager.LayoutParams.FLAG_SECURE,
+            WindowManager.LayoutParams.FLAG_SECURE
+        )
+        
+        // 阻止用户通过任务管理器关闭应用
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            window.setDecorFitsSystemWindows(false)
+        }
+        
         try {
             // 注册关闭广播接收器
             registerReceiver(closeReceiver, IntentFilter("com.ljh.phonemanage.CLOSE_LOCK_SCREEN"))
@@ -218,33 +233,52 @@ class LockScreenActivity : ComponentActivity() {
     
     // 处理解锁操作
     private fun handleUnlock() {
+        // 防止重复解锁导致的问题
+        if (!isLocked) {
+            Log.d(TAG, "已经处于解锁状态，忽略重复解锁请求")
+            return
+        }
+        
+        Log.d(TAG, "开始解锁流程...")
         // 解锁时立即设置isLocked为false，停止监控
         isLocked = false
         
         // 停止设备状态检查
         stopDeviceStatusChecker()
         
+        // 取消所有正在执行的协程
+        deviceCheckJob?.cancel()
+        monitoringJob?.cancel()
+        
+        // 确保注销广播接收器
+        try {
+            unregisterReceiver(closeReceiver)
+            Log.d(TAG, "已注销广播接收器")
+        } catch (e: Exception) {
+            Log.e(TAG, "注销广播接收器失败：可能已经注销", e)
+        }
+        
         // 停止锁定任务模式（如果之前启动了）
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             try {
                 stopLockTask()
+                Log.d(TAG, "已停止锁定任务模式")
             } catch (e: Exception) {
                 Log.e(TAG, "停止锁定任务失败", e)
             }
         }
         
-        // 启动主活动并结束锁屏活动
-        CoroutineScope(Dispatchers.Main).launch {
-            delay(300) // 短暂延迟以展示退出动画
+        // 使用单次性操作避免多次启动
+        if (!isFinishing) {
+            Log.d(TAG, "准备结束锁屏活动并返回主页")
+            finish()
             
-            // 创建启动主活动的Intent
-            val mainIntent = Intent(this@LockScreenActivity, MainActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
+            // 启动主活动
+            val mainIntent = Intent(this, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
             }
             startActivity(mainIntent)
-            
-            // 结束当前活动
-            finish()
         }
     }
     
@@ -324,48 +358,55 @@ class LockScreenActivity : ComponentActivity() {
     }
     
     private fun startMonitoring() {
-        CoroutineScope(Dispatchers.Default + Job()).launch {
-            while (isLocked) {
-                try {
-                    // 获取当前最顶部的Activity
-                    val topActivity = activityManager?.getRunningTasks(1)?.firstOrNull()?.topActivity
+        Log.d(TAG, "开始监控设备状态...")
+        
+        // 取消之前的监控任务（如果存在）
+        monitoringJob?.cancel()
+        
+        // 创建新的监控任务
+        monitoringJob = CoroutineScope(Dispatchers.IO).launch {
+            try {
+                Log.d(TAG, "监控任务已启动")
+                
+                while (isActive && isLocked) {
+                    // 每隔一段时间检查一次锁屏状态是否需要维持
+                    delay(5000) // 每5秒检查一次
                     
-                    // 如果当前Activity不是锁屏Activity，则立即将锁屏Activity移到前台
-                    if (topActivity?.className != this@LockScreenActivity.javaClass.name) {
+                    // 检查应用是否仍然需要保持在前台
+                    if (isLocked) {
+                        Log.d(TAG, "监控检查: 设备仍处于锁定状态")
+                        
+                        // 确保应用仍在前台
                         withContext(Dispatchers.Main) {
-                            moveTaskToFront()
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                                try {
+                                    // 检查锁定任务状态，如有必要再次调用
+                                    if (activityManager?.isInLockTaskMode != true) {
+                                        Log.d(TAG, "监控检测到非锁定任务模式，尝试重新锁定")
+                                        startLockTask()
+                                    }
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "重新锁定任务失败", e)
+                                }
+                            }
                         }
+                    } else {
+                        Log.d(TAG, "监控检查: 设备已解锁，停止监控")
+                        break
                     }
-                    
-                    delay(10) // 每10ms检查一次
-                } catch (e: Exception) {
-                    e.printStackTrace()
                 }
+            } catch (e: CancellationException) {
+                Log.d(TAG, "监控任务被取消")
+            } catch (e: Exception) {
+                Log.e(TAG, "监控任务异常", e)
+            } finally {
+                Log.d(TAG, "监控任务结束")
             }
-        }
-    }
-    
-    private fun moveTaskToFront() {
-        try {
-            // 使用FLAG_ACTIVITY_MULTIPLE_TASK确保立即显示
-            val intent = Intent(this, LockScreenActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                addFlags(Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
-                addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
-            }
-            startActivity(intent)
-            
-            // 强制将当前任务移到前台
-            activityManager?.moveTaskToFront(taskId, ActivityManager.MOVE_TASK_WITH_HOME)
-        } catch (e: Exception) {
-            e.printStackTrace()
         }
     }
     
     override fun onBackPressed() {
-        // 禁用返回键
-        // 不调用super.onBackPressed()
+        // 不调用super.onBackPressed()，返回键失效
         Log.d(TAG, "返回键被禁用")
     }
     
@@ -386,14 +427,53 @@ class LockScreenActivity : ComponentActivity() {
         pomodoroState.stopTimer()
         Log.d(TAG, "锁屏页面暂停，已停止计时器")
         if (isLocked) {
-            moveTaskToFront()
+            try {
+                // 获取当前应用的任务信息
+                val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+                val taskList = am.getRunningTasks(10) // 获取运行中的前10个任务
+                
+                // 查找当前应用的任务ID
+                for (taskInfo in taskList) {
+                    if (taskInfo.topActivity?.packageName == packageName) {
+                        // 找到当前应用的任务，将其移至前台
+                        am.moveTaskToFront(taskInfo.id, 0)
+                        Log.d(TAG, "已将应用任务移至前台")
+                        break
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "尝试将任务移至前台时发生错误", e)
+            }
+        }
+        
+        // 如果应用即将进入后台，立即重新启动锁屏活动
+        if (!isFinishing) {
+            val intent = Intent(this, LockScreenActivity::class.java)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(intent)
         }
     }
     
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         if (isLocked) {
-            moveTaskToFront()
+            try {
+                // 获取当前应用的任务信息
+                val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+                val taskList = am.getRunningTasks(10) // 获取运行中的前10个任务
+                
+                // 查找当前应用的任务ID
+                for (taskInfo in taskList) {
+                    if (taskInfo.topActivity?.packageName == packageName) {
+                        // 找到当前应用的任务，将其移至前台
+                        am.moveTaskToFront(taskInfo.id, 0)
+                        Log.d(TAG, "已将应用任务移至前台")
+                        break
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "尝试将任务移至前台时发生错误", e)
+            }
         }
     }
     
@@ -468,6 +548,20 @@ class LockScreenActivity : ComponentActivity() {
             true
         } else {
             false
+        }
+    }
+
+    // 在onResume方法中启用锁定任务模式
+    override fun onResume() {
+        super.onResume()
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            try {
+                startLockTask()
+                Log.d(TAG, "锁定任务模式已启用")
+            } catch (e: Exception) {
+                Log.e(TAG, "启用锁定任务模式失败", e)
+            }
         }
     }
 }

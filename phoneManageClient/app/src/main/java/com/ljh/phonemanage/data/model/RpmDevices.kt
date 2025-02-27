@@ -38,7 +38,7 @@ data class RpmDevices(
 
     /** 在线状态 */
     @SerializedName("status")
-    val status: String? = "online",
+    val status: Long? = 1,
 
     /** 最近一次在线时间 */
     @SerializedName("lastSeen")

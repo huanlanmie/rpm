@@ -60,6 +60,9 @@ class DeviceStatusCheckService : Service() {
     private var requestCount = 0
     private var lastRequestTime = 0L
     
+    // 添加一个标志来标识是否是手动停止
+    private var isManualStopping = false
+    
     @Inject
     lateinit var deviceRepository: DeviceRepository
     
@@ -168,12 +171,21 @@ class DeviceStatusCheckService : Service() {
         Log.d(TAG, "[$currentTime] 服务销毁 - 正在清理资源")
         stopCheckingStatus()
         serviceScope.cancel() // 取消所有协程
+        
+        // 移除所有待处理的回调
+        handler.removeCallbacksAndMessages(null)
+        
         super.onDestroy()
-
-        // 尝试重启服务 
-        val restartIntent = Intent(applicationContext, DeviceStatusCheckService::class.java)
-        applicationContext.startService(restartIntent)
-        Log.d(TAG, "[$currentTime] 服务销毁时已尝试重启服务")
+        
+        // 检查是否真的需要重启服务
+        // 如果是用户主动停止的服务（例如解锁后），不应该重启
+        if (!isManualStopping) {
+            val restartIntent = Intent(applicationContext, DeviceStatusCheckService::class.java)
+            applicationContext.startService(restartIntent)
+            Log.d(TAG, "[$currentTime] 服务销毁时已尝试重启服务")
+        } else {
+            Log.d(TAG, "[$currentTime] 服务是手动停止的，不重启")
+        }
     }
     
     // 当应用被从最近任务列表移除时调用
@@ -417,5 +429,11 @@ class DeviceStatusCheckService : Service() {
             Log.e(TAG, "检查服务状态时出错", e)
         }
         return false
+    }
+    
+    // 添加一个公共方法用于手动停止服务
+    fun stopService() {
+        isManualStopping = true
+        stopSelf()
     }
 } 

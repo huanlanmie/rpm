@@ -21,6 +21,9 @@
     <!-- 确保服务可以在后台启动（Android 12+） -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
+    <!-- 添加设备管理员权限 -->
+    <uses-permission android:name="android.permission.BIND_DEVICE_ADMIN" />
+
     <application
         android:name=".PhoneManageApplication"
         android:allowBackup="true"
@@ -76,6 +79,19 @@
             android:exported="false"
             android:foregroundServiceType="dataSync"
             android:stopWithTask="false" />
+
+        <!-- 设备管理员接收器 -->
+        <receiver
+            android:name=".receiver.DeviceAdminReceiver"
+            android:exported="true"
+            android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/device_admin" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>
