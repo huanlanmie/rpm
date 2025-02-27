@@ -16,6 +16,7 @@ import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -25,6 +26,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -37,6 +39,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -69,20 +72,23 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import kotlin.random.Random
+import kotlinx.coroutines.CancellationException
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 
 @AndroidEntryPoint
 class LockScreenActivity : ComponentActivity() {
     private var activityManager: ActivityManager? = null
     private var isLocked = true
     private val TAG = "LockScreenActivity"
-    
+
     // 添加依赖注入
     @Inject
     lateinit var deviceRepository: DeviceRepository
     
     @Inject
     lateinit var deviceManager: DeviceManager
-    
+
     // 定时器相关变量
     private val handler = Handler(Looper.getMainLooper())
     private val checkStatusRunnable = Runnable { checkDeviceStatus() }
@@ -97,6 +103,9 @@ class LockScreenActivity : ComponentActivity() {
             finish()
         }
     }
+    
+    // 在Activity级别创建番茄状态
+    private val pomodoroState = PomodoroState()
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -193,7 +202,7 @@ class LockScreenActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    LockScreenContent(password) {
+                    LockScreenContent(password, pomodoroState) {
                         handleUnlock()
                     }
                 }
@@ -373,6 +382,9 @@ class LockScreenActivity : ComponentActivity() {
     
     override fun onPause() {
         super.onPause()
+        // 确保在页面暂停时停止计时器
+        pomodoroState.stopTimer()
+        Log.d(TAG, "锁屏页面暂停，已停止计时器")
         if (isLocked) {
             moveTaskToFront()
         }
@@ -386,6 +398,9 @@ class LockScreenActivity : ComponentActivity() {
     }
     
     override fun onDestroy() {
+        // 确保销毁时停止计时器
+        pomodoroState.stopTimer()
+        Log.d(TAG, "锁屏页面销毁，已停止计时器")
         Log.d(TAG, "锁屏活动销毁，isLocked=$isLocked")
         
         // 停止设备状态检查
@@ -402,97 +417,99 @@ class LockScreenActivity : ComponentActivity() {
         isLocked = false
         super.onDestroy()
     }
+    
+    // 增强手势拦截效果，不仅拦截上划，也拦截所有可能的导航手势
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        // 扩大拦截范围，保护番茄状态不被意外触发
+        if (event.action == MotionEvent.ACTION_DOWN || event.action == MotionEvent.ACTION_MOVE) {
+            // 锁屏模式下，任何边缘手势都被拦截
+            val screenWidth = resources.displayMetrics.widthPixels
+            val screenHeight = resources.displayMetrics.heightPixels
+            val edgeThreshold = 100 // 边缘区域像素
+
+            // 检测是否在屏幕边缘
+            val isOnEdge = event.x < edgeThreshold || // 左边缘
+                           event.x > screenWidth - edgeThreshold || // 右边缘
+                           event.y < edgeThreshold || // 上边缘
+                           event.y > screenHeight - edgeThreshold // 下边缘
+
+            if (isOnEdge) {
+                Log.d(TAG, "拦截屏幕边缘手势，坐标: (${event.x}, ${event.y})")
+                return true
+            }
+        }
+        
+        // 原有的上划检测逻辑
+        if (isSystemGestureInProgress(event)) {
+            Log.d(TAG, "检测到系统手势尝试，拦截并忽略")
+            return true
+        }
+        
+        return super.dispatchTouchEvent(event)
+    }
+    
+    // 检测系统手势
+    private fun isSystemGestureInProgress(event: MotionEvent): Boolean {
+        // 只关注ACTION_DOWN和ACTION_MOVE事件
+        if (event.action != MotionEvent.ACTION_DOWN && event.action != MotionEvent.ACTION_MOVE) {
+            return false
+        }
+        
+        // 检测屏幕底部的上划手势
+        val screenHeight = resources.displayMetrics.heightPixels
+        val gestureZone = screenHeight * 0.15 // 屏幕底部15%区域
+        
+        // 如果触摸点在屏幕底部，且是上划动作
+        return if (event.action == MotionEvent.ACTION_MOVE 
+                && event.y > (screenHeight - gestureZone)
+                && event.historySize > 0 
+                && event.getHistoricalY(0) - event.y > 100) { // 上划距离超过100像素
+            Log.d(TAG, "检测到底部上划手势，忽略此手势")
+            true
+        } else {
+            false
+        }
+    }
 }
 
 @Composable
-fun LockScreenContent(password: String, onUnlock: () -> Unit) {
+fun LockScreenContent(
+    password: String, 
+    pomodoroState: PomodoroState,
+    onUnlock: () -> Unit
+) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
+
     
     // 新增一个状态，表示界面是否正在解锁过程中
     var isUnlocking by remember { mutableStateOf(false) }
-    
-    // 番茄时钟状态
-    var currentMode by remember { mutableStateOf("WORK") }
-    var isTimerRunning by remember { mutableStateOf(false) }
-    var remainingTimeMs by remember { mutableLongStateOf(25 * 60 * 1000L) }
     var inputPassword by remember { mutableStateOf("") }
     var isPasswordError by remember { mutableStateOf(false) }
-    var completedPomodoros by remember { mutableIntStateOf(0) }
-    
-    // 在Composable函数内部，添加防抖变量
-    var lastClickTime by remember { mutableLongStateOf(0L) }
-    val debounceTime = 500L // 设置防抖时间为500毫秒
     
     // 计算进度百分比
-    val totalTimeMs = when (currentMode) {
-        "WORK" -> 25 * 60 * 1000L
-        "SHORT_BREAK" -> 5 * 60 * 1000L
-        else -> 15 * 60 * 1000L
-    }
-    val progress = 1f - (remainingTimeMs.toFloat() / totalTimeMs.toFloat())
+    val progress = 1f - (pomodoroState.remainingTimeMs.toFloat() / pomodoroState.totalTimeMs.toFloat())
     val animatedProgress by animateFloatAsState(
         targetValue = progress,
         label = "progress animation"
     )
     
     // 颜色设置
-    val progressColor = when (currentMode) {
+    val progressColor = when (pomodoroState.currentMode) {
         "WORK" -> Color(0xFFE57373) // 红色，工作时间
         "SHORT_BREAK" -> Color(0xFF81C784) // 绿色，短休息
         else -> Color(0xFF64B5F6) // 蓝色，长休息
     }
     
     // 时钟更新，只有在未解锁时才运行
-    LaunchedEffect(isTimerRunning, currentMode, isUnlocking) {
-        if (isTimerRunning && !isUnlocking) {
-            var lastPomodoroCompletionTime = 0L
-            
-            while (remainingTimeMs > 0 && !isUnlocking) {
+    LaunchedEffect(pomodoroState.isTimerRunning, pomodoroState.currentMode, isUnlocking) {
+        if (pomodoroState.isTimerRunning && !isUnlocking) {
+            while (pomodoroState.isTimerRunning && !isUnlocking) {
                 delay(1000)
                 if (!isUnlocking) {
-                    remainingTimeMs -= 1000
+                    pomodoroState.decreaseTime(1000)
                 }
             }
-            
-            // 时间到，切换模式
-            if (remainingTimeMs <= 0 && !isUnlocking) {
-                val currentTime = System.currentTimeMillis()
-                // 确保番茄完成事件不会在500ms内重复触发
-                if (currentTime - lastPomodoroCompletionTime > 500) {
-                    lastPomodoroCompletionTime = currentTime
-                    
-                    when (currentMode) {
-                        "WORK" -> {
-                            Log.d(TAG, "工作时间结束，当前已完成番茄数: $completedPomodoros")
-                            completedPomodoros++
-                            Log.d(TAG, "番茄+1，现在完成数量: $completedPomodoros")
-                            
-                            if (completedPomodoros % 4 == 0) {
-                                currentMode = "LONG_BREAK"
-                                remainingTimeMs = 15 * 60 * 1000L
-                                Log.d(TAG, "切换到长休息模式")
-                            } else {
-                                currentMode = "SHORT_BREAK"
-                                remainingTimeMs = 5 * 60 * 1000L
-                                Log.d(TAG, "切换到短休息模式")
-                            }
-                        }
-                        "SHORT_BREAK", "LONG_BREAK" -> {
-                            currentMode = "WORK"
-                            remainingTimeMs = 25 * 60 * 1000L
-                            Log.d(TAG, "休息结束，切换到工作模式")
-                        }
-                    }
-                }
-            }
-        }
-    }
-    
-    // 当活动被销毁时停止计时器
-    DisposableEffect(Unit) {
-        onDispose {
-            isTimerRunning = false
         }
     }
     
@@ -546,7 +563,7 @@ fun LockScreenContent(password: String, onUnlock: () -> Unit) {
             
             // 番茄时钟状态
             Text(
-                text = when (currentMode) {
+                text = when (pomodoroState.currentMode) {
                     "WORK" -> "工作时间"
                     "SHORT_BREAK" -> "短休息"
                     else -> "长休息"
@@ -571,8 +588,8 @@ fun LockScreenContent(password: String, onUnlock: () -> Unit) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    val minutes = TimeUnit.MILLISECONDS.toMinutes(remainingTimeMs)
-                    val seconds = TimeUnit.MILLISECONDS.toSeconds(remainingTimeMs) -
+                    val minutes = TimeUnit.MILLISECONDS.toMinutes(pomodoroState.remainingTimeMs)
+                    val seconds = TimeUnit.MILLISECONDS.toSeconds(pomodoroState.remainingTimeMs) -
                             TimeUnit.MINUTES.toSeconds(minutes)
                     
                     Text(
@@ -583,7 +600,7 @@ fun LockScreenContent(password: String, onUnlock: () -> Unit) {
                     )
                     
                     Text(
-                        text = "已完成 $completedPomodoros 个番茄",
+                        text = "已完成 ${pomodoroState.completedPomodoros} 个番茄",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
                     )
@@ -596,91 +613,101 @@ fun LockScreenContent(password: String, onUnlock: () -> Unit) {
                 modifier = Modifier.fillMaxWidth()
             ) {
                 // 重置按钮
-                IconButton(
-                    onClick = {
-                        remainingTimeMs = when (currentMode) {
-                            "WORK" -> 25 * 60 * 1000L
-                            "SHORT_BREAK" -> 5 * 60 * 1000L
-                            else -> 15 * 60 * 1000L
-                        }
-                        isTimerRunning = false
-                    },
+                Box(
                     modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .size(64.dp)
+                        .padding(4.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f),
+                            shape = CircleShape
+                        )
+                        .clickable { pomodoroState.resetTimer() },
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         Icons.Default.Refresh,
                         contentDescription = "重置",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-                
-                // 开始/暂停按钮
-                IconButton(
-                    onClick = { isTimerRunning = !isTimerRunning },
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(CircleShape)
-                        .background(if (isTimerRunning) progressColor.copy(alpha = 0.8f) else progressColor)
-                ) {
-                    Icon(
-                        if (isTimerRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (isTimerRunning) "暂停" else "开始",
                         tint = Color.White,
                         modifier = Modifier.size(28.dp)
                     )
                 }
                 
-                // 跳过按钮
-                IconButton(
-                    onClick = {
-                        val currentTime = System.currentTimeMillis()
-                        // 实现点击防抖
-                        if (currentTime - lastClickTime > debounceTime) {
-                            lastClickTime = currentTime
-                            
-                            when (currentMode) {
-                                "WORK" -> {
-                                    // 记录状态更改前的日志
-                                    Log.d(TAG, "跳过工作时间段，当前已完成番茄数: $completedPomodoros")
-                                    
-                                    completedPomodoros++
-                                    
-                                    if (completedPomodoros % 4 == 0) {
-                                        currentMode = "LONG_BREAK"
-                                        remainingTimeMs = 15 * 60 * 1000L
-                                        Log.d(TAG, "切换到长休息，已完成番茄数: $completedPomodoros")
-                                    } else {
-                                        currentMode = "SHORT_BREAK"
-                                        remainingTimeMs = 5 * 60 * 1000L
-                                        Log.d(TAG, "切换到短休息，已完成番茄数: $completedPomodoros")
-                                    }
-                                }
-                                "SHORT_BREAK", "LONG_BREAK" -> {
-                                    Log.d(TAG, "跳过休息时间，切换到工作模式")
-                                    currentMode = "WORK"
-                                    remainingTimeMs = 25 * 60 * 1000L
-                                }
-                            }
-                            isTimerRunning = false
-                        } else {
-                            Log.d(TAG, "忽略点击，点击间隔过短: ${currentTime - lastClickTime}ms")
-                        }
-                    },
+                // 开始/暂停按钮
+                Box(
                     modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .size(64.dp)
+                        .padding(4.dp)
+                        .background(
+                            color = if (pomodoroState.isTimerRunning) 
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+                            else 
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                            shape = CircleShape
+                        )
+                        .clickable { pomodoroState.toggleTimer() },
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        Icons.Default.Close,
-                        contentDescription = "跳过",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(24.dp)
+                        if (pomodoroState.isTimerRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = if (pomodoroState.isTimerRunning) "暂停" else "开始",
+                        tint = Color.White,
+                        modifier = Modifier.size(32.dp)
                     )
+                }
+                
+                // 跳过按钮（长按）
+                Box(
+                    modifier = Modifier
+                        .size(72.dp)  // 增大整个容器尺寸以容纳外部进度条
+                        .padding(4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    // 长按进度环 - 放在外围
+                    if (pomodoroState.isLongPressing) {
+                        CircularProgressIndicator(
+                            progress = { pomodoroState.longPressProgress },
+                            modifier = Modifier.size(72.dp),  // 比按钮大，防止手指遮挡
+                            strokeWidth = 3.dp,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+                        )
+                    }
+                    
+                    // 内部按钮
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .background(
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f),
+                                shape = CircleShape
+                            )
+                            .pointerInput(Unit) {
+                                detectTapGestures(
+                                    onPress = { offset ->
+                                        try {
+                                            pomodoroState.startLongPress()
+                                            Log.d("LockScreen", "开始按压，准备长按")
+                                            val released = tryAwaitRelease()
+                                            if (!released) {
+                                                Log.d("LockScreen", "按压被取消")
+                                            } else {
+                                                Log.d("LockScreen", "按压释放")
+                                            }
+                                        } finally {
+                                            pomodoroState.cancelLongPress()
+                                        }
+                                    }
+                                )
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        // 跳过图标
+                        Icon(
+                            imageVector = Icons.Default.SkipNext,
+                            contentDescription = "长按跳过",
+                            tint = Color.White,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
                 }
             }
             
@@ -711,7 +738,7 @@ fun LockScreenContent(password: String, onUnlock: () -> Unit) {
                 keyboardActions = KeyboardActions(
                     onDone = {
                         if (inputPassword == password) {
-                            isTimerRunning = false
+                            pomodoroState.toggleTimer()
                             isUnlocking = true
                             onUnlock()
                         } else {
@@ -727,7 +754,7 @@ fun LockScreenContent(password: String, onUnlock: () -> Unit) {
                 onClick = {
                     if (inputPassword == password) {
                         // 在解锁前停止所有进行中的操作
-                        isTimerRunning = false
+                        pomodoroState.toggleTimer()
                         isUnlocking = true
                         onUnlock()
                     } else {
@@ -752,6 +779,31 @@ fun LockScreenContent(password: String, onUnlock: () -> Unit) {
             
             // 添加底部空白，确保在小屏幕设备上所有内容都可见
             Spacer(modifier = Modifier.height(24.dp))
+        }
+    }
+
+    // 添加长按进度更新逻辑
+    LaunchedEffect(pomodoroState.isLongPressing) {
+        if (pomodoroState.isLongPressing) {
+            val longPressTime = 1200L
+            val startTime = System.currentTimeMillis()
+            
+            try {
+                while (pomodoroState.isLongPressing) {
+                    val elapsedTime = System.currentTimeMillis() - startTime
+                    val progress = (elapsedTime.toFloat() / longPressTime).coerceIn(0f, 1f)
+                    pomodoroState.updateLongPressProgress(progress)
+                    
+                    if (progress >= 1f) {
+                        Log.d("LockScreen", "长按进度完成")
+                        break
+                    }
+                    
+                    delay(16)
+                }
+            } catch (e: Exception) {
+                Log.e("LockScreen", "长按进度更新异常", e)
+            }
         }
     }
 } 
