@@ -14,6 +14,7 @@ import androidx.work.WorkManager
 import com.ljh.phonemanage.data.model.RpmDevices
 import com.ljh.phonemanage.data.repository.DeviceRepository
 import com.ljh.phonemanage.worker.DeviceStatusUpdateWorker
+import com.ljh.phonemanage.util.DeviceIdUtil
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -113,17 +114,22 @@ class DeviceManager @Inject constructor(
         var deviceToken = prefs.getString("device_token", null)
         
         if (deviceToken == null) {
-            // 生成新的设备Token，使用设备ID + 时间戳
-            deviceToken = "${getDeviceId()}_${System.currentTimeMillis()}"
+            // 使用更可靠的设备ID生成方式
+            deviceToken = DeviceIdUtil.getDeviceId(context)
             prefs.edit().putString("device_token", deviceToken).apply()
+            Log.d(TAG, "创建新的设备Token: $deviceToken")
+        } else {
+            Log.d(TAG, "使用已存在的设备Token: $deviceToken")
         }
         
         return deviceToken
     }
     
     /**
-     * 获取设备ID
+     * 获取设备ID - 已不再使用
+     * 保留此方法仅用于参考
      */
+    @Deprecated("使用DeviceIdUtil.getDeviceId()替代", ReplaceWith("DeviceIdUtil.getDeviceId(context)"))
     private fun getDeviceId(): String {
         return Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
     }

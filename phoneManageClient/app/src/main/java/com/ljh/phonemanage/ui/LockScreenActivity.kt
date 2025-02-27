@@ -3,6 +3,7 @@ package com.ljh.phonemanage.ui
 import android.app.Activity
 import android.app.ActivityManager
 import android.content.BroadcastReceiver
+import android.content.ContentValues.TAG
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -419,6 +420,10 @@ fun LockScreenContent(password: String, onUnlock: () -> Unit) {
     var isPasswordError by remember { mutableStateOf(false) }
     var completedPomodoros by remember { mutableIntStateOf(0) }
     
+    // 在Composable函数内部，添加防抖变量
+    var lastClickTime by remember { mutableLongStateOf(0L) }
+    val debounceTime = 500L // 设置防抖时间为500毫秒
+    
     // 计算进度百分比
     val totalTimeMs = when (currentMode) {
         "WORK" -> 25 * 60 * 1000L
@@ -441,6 +446,8 @@ fun LockScreenContent(password: String, onUnlock: () -> Unit) {
     // 时钟更新，只有在未解锁时才运行
     LaunchedEffect(isTimerRunning, currentMode, isUnlocking) {
         if (isTimerRunning && !isUnlocking) {
+            var lastPomodoroCompletionTime = 0L
+            
             while (remainingTimeMs > 0 && !isUnlocking) {
                 delay(1000)
                 if (!isUnlocking) {
@@ -450,20 +457,32 @@ fun LockScreenContent(password: String, onUnlock: () -> Unit) {
             
             // 时间到，切换模式
             if (remainingTimeMs <= 0 && !isUnlocking) {
-                when (currentMode) {
-                    "WORK" -> {
-                        completedPomodoros++
-                        if (completedPomodoros % 4 == 0) {
-                            currentMode = "LONG_BREAK"
-                            remainingTimeMs = 15 * 60 * 1000L
-                        } else {
-                            currentMode = "SHORT_BREAK"
-                            remainingTimeMs = 5 * 60 * 1000L
+                val currentTime = System.currentTimeMillis()
+                // 确保番茄完成事件不会在500ms内重复触发
+                if (currentTime - lastPomodoroCompletionTime > 500) {
+                    lastPomodoroCompletionTime = currentTime
+                    
+                    when (currentMode) {
+                        "WORK" -> {
+                            Log.d(TAG, "工作时间结束，当前已完成番茄数: $completedPomodoros")
+                            completedPomodoros++
+                            Log.d(TAG, "番茄+1，现在完成数量: $completedPomodoros")
+                            
+                            if (completedPomodoros % 4 == 0) {
+                                currentMode = "LONG_BREAK"
+                                remainingTimeMs = 15 * 60 * 1000L
+                                Log.d(TAG, "切换到长休息模式")
+                            } else {
+                                currentMode = "SHORT_BREAK"
+                                remainingTimeMs = 5 * 60 * 1000L
+                                Log.d(TAG, "切换到短休息模式")
+                            }
                         }
-                    }
-                    "SHORT_BREAK", "LONG_BREAK" -> {
-                        currentMode = "WORK"
-                        remainingTimeMs = 25 * 60 * 1000L
+                        "SHORT_BREAK", "LONG_BREAK" -> {
+                            currentMode = "WORK"
+                            remainingTimeMs = 25 * 60 * 1000L
+                            Log.d(TAG, "休息结束，切换到工作模式")
+                        }
                     }
                 }
             }
@@ -618,23 +637,38 @@ fun LockScreenContent(password: String, onUnlock: () -> Unit) {
                 // 跳过按钮
                 IconButton(
                     onClick = {
-                        when (currentMode) {
-                            "WORK" -> {
-                                completedPomodoros++
-                                if (completedPomodoros % 4 == 0) {
-                                    currentMode = "LONG_BREAK"
-                                    remainingTimeMs = 15 * 60 * 1000L
-                                } else {
-                                    currentMode = "SHORT_BREAK"
-                                    remainingTimeMs = 5 * 60 * 1000L
+                        val currentTime = System.currentTimeMillis()
+                        // 实现点击防抖
+                        if (currentTime - lastClickTime > debounceTime) {
+                            lastClickTime = currentTime
+                            
+                            when (currentMode) {
+                                "WORK" -> {
+                                    // 记录状态更改前的日志
+                                    Log.d(TAG, "跳过工作时间段，当前已完成番茄数: $completedPomodoros")
+                                    
+                                    completedPomodoros++
+                                    
+                                    if (completedPomodoros % 4 == 0) {
+                                        currentMode = "LONG_BREAK"
+                                        remainingTimeMs = 15 * 60 * 1000L
+                                        Log.d(TAG, "切换到长休息，已完成番茄数: $completedPomodoros")
+                                    } else {
+                                        currentMode = "SHORT_BREAK"
+                                        remainingTimeMs = 5 * 60 * 1000L
+                                        Log.d(TAG, "切换到短休息，已完成番茄数: $completedPomodoros")
+                                    }
+                                }
+                                "SHORT_BREAK", "LONG_BREAK" -> {
+                                    Log.d(TAG, "跳过休息时间，切换到工作模式")
+                                    currentMode = "WORK"
+                                    remainingTimeMs = 25 * 60 * 1000L
                                 }
                             }
-                            "SHORT_BREAK", "LONG_BREAK" -> {
-                                currentMode = "WORK"
-                                remainingTimeMs = 25 * 60 * 1000L
-                            }
+                            isTimerRunning = false
+                        } else {
+                            Log.d(TAG, "忽略点击，点击间隔过短: ${currentTime - lastClickTime}ms")
                         }
-                        isTimerRunning = false
                     },
                     modifier = Modifier
                         .size(48.dp)

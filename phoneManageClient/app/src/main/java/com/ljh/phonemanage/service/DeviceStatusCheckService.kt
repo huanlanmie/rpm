@@ -252,16 +252,23 @@ class DeviceStatusCheckService : Service() {
                         // 更新UI必须在主线程
                         // 设备状态不同时才执行操作，避免无谓的操作
                         if (serverDevice.deviceStatus == 0L) {
-                            Log.d(TAG, "[$currentTime] 服务器要求锁定设备 - 当前设备未锁定，执行锁定操作")
-                            screenManager.lockDevice(deviceToken)
-                            updateNotification("设备已锁定")
+                            Log.d(TAG, "[$currentTime] 服务器要求锁定设备 - 检查锁屏页面是否已在运行")
+                            
+                            // 检查锁屏页面是否已经运行
+                            if (!isLockScreenActivityRunning()) {
+                                Log.d(TAG, "[$currentTime] 锁屏页面未运行，执行锁定操作")
+                                screenManager.lockDevice(deviceToken)
+                                updateNotification("设备已锁定")
+                            } else {
+                                Log.d(TAG, "[$currentTime] 锁屏页面已在运行，无需重复锁定")
+                                updateNotification("设备已处于锁定状态")
+                            }
                         } else if (serverDevice.deviceStatus == 1L ) {
                             Log.d(TAG, "[$currentTime] 服务器要求解锁设备 - 当前设备已锁定，执行解锁操作")
                             screenManager.unlockDevice(deviceToken)
                             updateNotification("设备已解锁")
                         } else {
                             // 状态没变化，只更新通知
-                            screenManager.lockDevice(deviceToken)
                             val statusText = if (serverDevice.deviceStatus == 0L) "锁定" else "正常"
                             val actionText = if (serverDevice.deviceStatus == 0L)
                                 "服务器要求锁定但设备已锁定，无需操作"
@@ -270,7 +277,6 @@ class DeviceStatusCheckService : Service() {
                             Log.d(TAG, "[$currentTime] $actionText")
                             updateNotification("设备状态: $statusText")
                         }
-
                         
                         // 成功检查后重置失败计数
                         if (consecutiveFailures > 0) {
@@ -367,5 +373,49 @@ class DeviceStatusCheckService : Service() {
     
     private fun getCurrentTimeString(): String {
         return SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
+    }
+    
+    /**
+     * 检查锁屏页面是否正在运行
+     */
+    private fun isLockScreenActivityRunning(): Boolean {
+        try {
+            val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+            
+            // 在较新版本的Android上，getRunningTasks可能返回有限的结果
+            // 但我们只关心顶部活动，所以应该仍然有效
+            val tasks = activityManager.getRunningTasks(1)
+            if (tasks.isNotEmpty()) {
+                val topActivity = tasks[0].topActivity
+                val isLockScreenRunning = topActivity?.className?.contains("LockScreenActivity") == true
+                Log.d(TAG, "当前顶部活动: ${topActivity?.className}, 是否为锁屏页面: $isLockScreenRunning")
+                return isLockScreenRunning
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "检查锁屏活动状态时出错", e)
+            
+            // 备用方法：检查特定服务是否运行
+            val serviceRunning = isServiceRunning(LockScreenService::class.java)
+            Log.d(TAG, "备用检查 - 锁屏服务是否运行: $serviceRunning")
+            return serviceRunning
+        }
+        return false
+    }
+    
+    /**
+     * 检查指定服务是否正在运行
+     */
+    private fun isServiceRunning(serviceClass: Class<*>): Boolean {
+        try {
+            val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+            for (service in activityManager.getRunningServices(Int.MAX_VALUE)) {
+                if (serviceClass.name == service.service.className) {
+                    return true
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "检查服务状态时出错", e)
+        }
+        return false
     }
 } 
