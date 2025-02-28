@@ -10,12 +10,11 @@
         android:id="@+id/splash_image"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:scaleType="centerCrop"
-        android:src="@drawable/splash_image"
+        android:scaleType="fitCenter"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        android:contentDescription="启动页图片" />
+        android:contentDescription="@string/splash_name" />
 
 </androidx.constraintlayout.widget.ConstraintLayout> 

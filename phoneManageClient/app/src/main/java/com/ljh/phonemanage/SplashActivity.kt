@@ -4,10 +4,13 @@ import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.widget.ImageView
 import androidx.activity.ComponentActivity
 import androidx.core.view.WindowCompat
 import android.view.WindowManager
 import android.util.Log
+import com.bumptech.glide.Glide
+import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions
 
 class SplashActivity : ComponentActivity() {
     private val TAG = "SplashActivity"
@@ -25,6 +28,15 @@ class SplashActivity : ComponentActivity() {
         
         // 设置内容视图为启动页布局
         setContentView(R.layout.activity_splash)
+        
+        // 使用Glide加载启动页图片
+        val splashImageView = findViewById<ImageView>(R.id.splash_image)
+        
+        Glide.with(this)
+            .load(R.drawable.splash_image)
+            .transition(DrawableTransitionOptions.withCrossFade())
+            .centerCrop() // 确保图片填充整个ImageView
+            .into(splashImageView)
         
         Log.d(TAG, "启动页已显示，将在${SPLASH_DISPLAY_TIME}ms后进入主程序")
         
