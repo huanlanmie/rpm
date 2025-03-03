@@ -27,6 +27,14 @@ public interface RpmDevicesMapper
      */
     public List<RpmDevices> selectRpmDevicesList(RpmDevices rpmDevices);
 
+
+    /**
+     * 查询所有存储用户的设备信息列表
+     * @return 存储用户的设备信息集合
+     */
+    public List<RpmDevices> selectAllRpmDevicesList();
+
+
     /**
      * 新增存储用户的设备信息
      * 

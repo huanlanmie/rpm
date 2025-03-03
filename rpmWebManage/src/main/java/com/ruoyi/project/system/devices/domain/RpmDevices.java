@@ -46,7 +46,7 @@ public class RpmDevices extends BaseEntity
 
     /** 在线状态 */
     @Excel(name = "在线状态")
-    private String status;
+    private Long status;
 
     /** 最近一次在线时间 */
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
@@ -124,17 +124,15 @@ public class RpmDevices extends BaseEntity
         return appVersion;
     }
 
-    public void setStatus(String status) 
-    {
-        this.status = status;
-    }
-
-    public String getStatus() 
-    {
+    public Long getStatus() {
         return status;
     }
 
-    public void setLastSeen(Date lastSeen) 
+    public void setStatus(Long status) {
+        this.status = status;
+    }
+
+    public void setLastSeen(Date lastSeen)
     {
         this.lastSeen = lastSeen;
     }

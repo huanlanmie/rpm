@@ -23,9 +23,14 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import com.ljh.phonemanage.ui.AppNavigation
 import com.ljh.phonemanage.service.DeviceStatusCheckService
+import com.ljh.phonemanage.manager.AutoStartPermissionManager
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    
+    @Inject
+    lateinit var autoStartPermissionManager: AutoStartPermissionManager
     
     // 处理权限请求的启动器
     private val requestPermissionLauncher = registerForActivityResult(
@@ -60,6 +65,9 @@ class MainActivity : ComponentActivity() {
         
         // 检查和请求必要的权限
         checkAndRequestPermissions()
+        
+        // 检查并申请自启动权限
+        checkAutoStartPermission()
         
         setContent {
             PhoneManageTheme {
@@ -173,5 +181,19 @@ class MainActivity : ComponentActivity() {
             data = Uri.fromParts("package", packageName, null)
         }
         startActivity(intent)
+    }
+    
+    private fun checkAutoStartPermission() {
+        if (autoStartPermissionManager.needsAutoStartPermission()) {
+            // 使用传统AlertDialog而不是Compose版本
+            android.app.AlertDialog.Builder(this)
+                .setTitle("自启动权限")
+                .setMessage("为了确保应用能在设备重启后正常工作，请允许应用自启动。")
+                .setPositiveButton("前往设置") { _, _ ->
+                    autoStartPermissionManager.openAutoStartPermissionSettings()
+                }
+                .setNegativeButton("稍后再说", null)
+                .show()
+        }
     }
 }

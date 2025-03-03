@@ -155,7 +155,7 @@ public class RpmDevicesController extends BaseController
     @ResponseBody
     public AjaxResult clientEmergeUnlock(@RequestBody RpmDevices rpmDevices)
     {
-        return toAjax(rpmDevicesService.updateRpmDevices(rpmDevices));
+        return toAjax(rpmDevicesService.exigencyUnlockDevices(rpmDevices));
     }
 
     /**

@@ -38,6 +38,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="lastSeen != null "> and last_seen = #{lastSeen}</if>
         </where>
     </select>
+
+    <select id="selectAllRpmDevicesList"  resultMap="RpmDevicesResult">
+        <include refid="selectRpmDevicesVo"/>
+    </select>
     
     <select id="selectRpmDevicesById" parameterType="Long" resultMap="RpmDevicesResult">
         <include refid="selectRpmDevicesVo"/>

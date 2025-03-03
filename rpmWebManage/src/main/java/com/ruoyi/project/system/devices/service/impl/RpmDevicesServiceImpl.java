@@ -45,6 +45,11 @@ public class RpmDevicesServiceImpl implements IRpmDevicesService
         return rpmDevicesMapper.selectRpmDevicesList(rpmDevices);
     }
 
+    @Override
+    public List<RpmDevices> selectRpmDevicesList() {
+        return rpmDevicesMapper.selectAllRpmDevicesList();
+    }
+
     /**
      * 新增存储用户的设备信息
      * 

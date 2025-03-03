@@ -28,6 +28,12 @@ public interface IRpmDevicesService
     public List<RpmDevices> selectRpmDevicesList(RpmDevices rpmDevices);
 
     /**
+     * 查询存储用户的设备信息列表
+     * @return 存储用户的设备信息集合
+     */
+    public  List<RpmDevices> selectRpmDevicesList();
+
+    /**
      * 新增存储用户的设备信息
      * 
      * @param rpmDevices 存储用户的设备信息
