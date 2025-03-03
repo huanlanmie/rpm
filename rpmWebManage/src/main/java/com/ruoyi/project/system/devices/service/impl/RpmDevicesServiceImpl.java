@@ -124,6 +124,10 @@ public class RpmDevicesServiceImpl implements IRpmDevicesService
      */
     @Override
     public RpmDevices selectRpmDevicesByUuid(String uuid) {
-        return rpmDevicesMapper.selectRpmDevicesByUuid(uuid);
+        // 获取当前时间 并更新在线时间
+        RpmDevices rpmDevices = rpmDevicesMapper.selectRpmDevicesByUuid(uuid);
+        rpmDevices.setLastSeen(DateUtils.getNowDate());
+        rpmDevicesMapper.updateRpmDevices(rpmDevices);
+        return rpmDevices;
     }
 }
